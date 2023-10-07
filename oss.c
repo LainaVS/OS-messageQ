@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
         simul = arraytoint(optarg);    //set max number of processes to run simultaneously
         break;
       case 't':
-        iter = arraytoint(optarg);    //set number of iterations each worker should run
+        iter = arraytoint(optarg);     //set timelimit for worker runtime
         break;
       case '?':
 
@@ -51,6 +51,22 @@ int main(int argc, char** argv) {
     }
   }
 
+  //initialize the system clock
+  int sysClock;
+  
+  //loop to fork and exec call to workers. From psuedocode:
+  /*while(stillChildrenToLaunch) {
+    incrementClock();
+    //print every half second (simulated clock time):
+    printf("process table") //remove
+    printf(
+    
+    if(childHasTerminated) {
+      //update process table of terminated child
+      
+      //launch new child (but must obey process limits)
+    }
+  }*/
   //convert iter variable to char * for processing (source https://www.geeksforgeeks.org/sprintf-in-c/)
   char iterChar[50];
   sprintf(iterChar, "%d", iter); 

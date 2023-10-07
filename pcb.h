@@ -9,6 +9,8 @@
 #ifndef PCB_H
 #define PCB_H
 
+#include <unistd.h>
+
 struct PCB {
   int occupied;    // either true or false
   pid_t pid;       // process id of this child
