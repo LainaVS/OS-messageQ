@@ -10,7 +10,7 @@
 #include "validate.h"
 
 void fatal(char * msg) {
-  printf("\n\n\t%s\n\tExiting program.\n\n", msg);
+  fprintf(stderr, "\n\n\t%s\n\tExiting program.\n\n", msg);
   exit(1);
 }
 

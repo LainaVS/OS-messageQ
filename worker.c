@@ -5,6 +5,18 @@
 //  Clock
 //---------------------------------------------------
 
+/**********************************************************
+ * Child execs to worker, worker attaches to shared memory
+ * worker args: time to stay in system: s ns (allotedTime)
+ * worker tasks:
+ * **get sysClock time
+ * **calculate terminationTarget: sysClock time + workerArgs
+ * **>> output currTime, terminationTarget, 'just starting'
+ * **worker loops, checking sysClock 
+ * ****each time sec updates >> output currTime, terminationTarget, timeElapsed
+ * ****when terminationTarget reached >> output currTime, terminationTarget, 'terminating'
+ *********************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
