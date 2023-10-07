@@ -1,0 +1,32 @@
+//---------------------------------------------------
+//  Elaina Rohlfing
+//  October 5, 2023
+//  4760 001 
+//  Clock
+//---------------------------------------------------
+
+To compile and run project:
+> make
+> ./oss [-h -t -s -n]
+
+
+Example runs
+With defaults: 
+> ./oss
+
+With args:
+> ./oss -n5 -s2 -t2
+
+
+Notes:
+No options are required. Default argument for all options is 1.
+Program runs as expected and user is limited to argument values not greater than 10.
+
+
+Problems encountered during development:
+When trying to implement the -s simul restriction I had some trouble launching the 
+worker sets reliably. I also had some trouble with the parent terminating before the
+childern finished launching.
+
+After some rearranging I implemented a for loop in oss.c (lines 80 - 82) to ensure the 
+parent would wait until every batch of workers was launched.
