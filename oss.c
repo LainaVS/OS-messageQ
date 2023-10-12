@@ -10,13 +10,17 @@
 //#include <ctype.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
+#include <stdbool.h>
 #include "pcb.h"
 #include "validate.h"
+#include "macros.h" //system clock keys - might rename file
+/*
+  //initialize the system clock (alternately use #define)
+  const int sysClock_skey = ftok("oss.c", 1);   //generate seconds key based on file
+  const int sysClock_nskey = ftok("oss.c", 2);  //generate nanoseconds key based on file  
+*/
 
+static void incrementClock();
 static void parent();
 static void child();
 static void help();
@@ -28,9 +32,7 @@ int main(int argc, char** argv) {
   //set default args for options
   int proc = 1;
   int simul = 1;
-  int timelim = 1;
-
-
+  int timelim = 2;
 
   //parse options
   int option;
@@ -54,50 +56,59 @@ int main(int argc, char** argv) {
     }
   }
   
-  //initialize the system clock (alternately use #define)
-  const int sysClock_key_sec = ftok("oss.c", 1);      //generate seconds key based on file
-  const int sysClock_key_nano = ftok("oss.c", 2);  //generate nanoseconds key based on file  
-  
+  //allocate memory to shared keys
+  int shmid_seconds = shmget(SYSCLK_SKEY, BUFF_SZ, IPC_CREAT | 0666);
+  int shmid_nanoseconds = shmget(SYSCLK_NSKEY, BUFF_SZ, IPC_CREAT | 0666);
 
-  //do operations with shm_ptr_sec & shm_ptr_nano
-  /******************************************************
-  Check to see if shared memory works
-  Switch, 
-  > child -> fork exec -> detach
-  > parent -> wait -> detach -> free
-   ******************************************************/
-   switch (fork()) {
-     case -1:
-       fatal("Fork failed");
-       break;
-     case 0:
-       child(sysClock_key_sec, sysClock_key_nano);
-       break;
-     default:
-       parent(sysClock_key_sec, sysClock_key_nano);
-       break;
-   }
+  if(shmid_seconds <= 0 || shmid_nanoseconds <= 0)
+    fatal("Parent failed to create sys clock in shared memory");
   
+  //Attach to shared memory (in parent and in child)
+  int * sysClock_seconds = shmat(shmid_seconds, 0, 0);
+  int * sysClock_nanoseconds = shmat(shmid_nanoseconds, 0, 0);
+  
+  if (sysClock_seconds <= 0 || sysClock_nanoseconds <= 0) 
+    fatal("Parent failed to attach to Sysclock in shared memory");
+  
+/***************************************************
+ * 2) go into 60 second loop ->
+ *    3) increment clock every iteration (should roughly match real time)
+ *       >> output process table every half second
+ *    4) if -s < max: fork -> exec worker (child) and update processTable: (or while/until?)
+ *       OCCUPIED 1/0, PID chProcId, STARTSEC timeAtLaunch, STARTNANO timeAtLaunch
+ *    5) if -s > max: WAIT until a child terminates ((nonblocking wait() call)) 
+ *       int pid = waitpid(-1, &status, WNOHANG); -> ((return 0 if none term else pid of term'ed))
+ *       6) when child term: update childPCB entry
+ *          7) if proc (worker) remaining: loop
+ *          8) else: fin
+  ***************************************************/
   
   /****************************************************
    ****************************************************
    * From psuedocode: loop to fork and exec call to workers. 
-   ****************************************************
-
+   ****************************************************/
+  bool stillChildrenToLaunch = true;
+  bool childHasTerminated = true;
   while(stillChildrenToLaunch) {
-    incrementClock();
+    // incrementClock();
+    sleep(1);
+    *sysClock_seconds += 1;
+    *sysClock_nanoseconds += 1000;
     //print every half second (simulated clock time):
-    printf("process table") //remove
-    printf(
-    
+    printf("Parent: Incrementing SysClock at %ds %dns\n", *sysClock_seconds, *sysClock_nanoseconds);
+    printf("process table"); //remove
+     
     if(childHasTerminated) {
       //update process table of terminated child
-      
+      childHasTerminated = false;
       //launch new child (but must obey process limits)
+      pid_t workerPid = fork();
+      
+      stillChildrenToLaunch = false;
     }
   }
   
-  ***************************************************
+  /***************************************************
   ***************************************************/
   
   
@@ -113,9 +124,13 @@ int main(int argc, char** argv) {
   return EXIT_SUCCESS;
 }
 
+static void incrementClock() {
+
+}
 
 /**********************************************************
- * parent (oss tasks)
+ * parent desc (oss tasks)
+ ********************************************************** 
  * launch n (proc) number of workers (children)
  * uses parameters !--->(probably needs to be moved back into main)<---!
  * -t (timelim) sets worker args at random: 
@@ -135,12 +150,12 @@ int main(int argc, char** argv) {
  *          7) if proc (worker) remaining: loop
  *          8) else: fin
  *********************************************************/
-static void parent(int sysClock_key_s, int sysClock_key_ns) {
+static void parent() {
   int i;
   
   //allocate memory to shared keys
-  int shmid_seconds = shmget(sysClock_key_s, sizeof(int), IPC_CREAT | 0666);
-  int shmid_nanoseconds = shmget(sysClock_key_ns, sizeof(int), IPC_CREAT | 0666);
+  int shmid_seconds = shmget(SYSCLK_SKEY, BUFF_SZ, IPC_CREAT | 0666);
+  int shmid_nanoseconds = shmget(SYSCLK_NSKEY, BUFF_SZ, IPC_CREAT | 0666);
 
   if(shmid_seconds <= 0 || shmid_nanoseconds <= 0)
     fatal("Parent failed to create sys clock in shared memory");
@@ -152,7 +167,7 @@ static void parent(int sysClock_key_s, int sysClock_key_ns) {
   if (sysClock_seconds <= 0 || sysClock_nanoseconds <= 0) 
     fatal("Parent failed to attach to Sysclock in shared memory");
     
-  //increment the clock
+  //increment the clock (make separate function)
   for (i = 0; i < 10; i++) {
     sleep(2);
     *sysClock_seconds += 1;
@@ -172,24 +187,31 @@ static void parent(int sysClock_key_s, int sysClock_key_ns) {
 }
 
 /**********************************************************
- * Child execs to worker, worker attaches to shared memory
+ * Child will be worker - exec'd in parent, (need to refactor)
+ * worker attaches to shared memory
  * worker args: time to stay in system: s ns (allotedTime)
+ *   worker args selected randomly between 1 and -t
  * worker tasks:
- * **get sysClock time
- * **calculate terminationTarget: sysClock time + workerArgs
- * **>> output currTime, terminationTarget, 'just starting'
- * **worker loops, checking sysClock 
- * ****each time sec updates >> output currTime, terminationTarget, timeElapsed
- * ****when terminationTarget reached >> output currTime, terminationTarget, 'terminating'
+ * **save current sysClock time
+ * **calculate terminationTarget: currTime + workerArgs
+ *   >> output currTime, terminationTarget, 'just starting'
+ *   worker loops, 
+ *     check sysClock to update currTime
+ *     calculate elapsed time
+ *     if 1sec elapsed (if prevSec < currSec or more likely: if elapsedSec > 0):
+ *        >> output currTime, terminationTarget, timeElapsed
+ *     if terminationTarget reached 
+ *        >> output currTime, terminationTarget, 'terminating'
+ *        terminate
  *********************************************************/
-static void child(int sysClock_key_s, int sysClock_key_ns) {
+static void child() {
   int i;
   
   sleep(5);
   
   //allocate memory to shared keys (shild only needs read permissions)
-  int shmid_seconds = shmget(sysClock_key_s, sizeof(int), IPC_CREAT | 0444);
-  int shmid_nanoseconds = shmget(sysClock_key_ns, sizeof(int), IPC_CREAT | 0444);
+  int shmid_seconds = shmget(SYSCLK_NSKEY, BUFF_SZ, IPC_CREAT | 0444);
+  int shmid_nanoseconds = shmget(SYSCLK_NSKEY, BUFF_SZ, IPC_CREAT | 0444);
 
   if(shmid_seconds <= 0 || shmid_nanoseconds <= 0)
     fatal("Child failed to create sys clock in shared memory");
