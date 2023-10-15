@@ -9,18 +9,25 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <unistd.h>
-#include "pcb.h"
 #include "validate.h"
 #include "macros.h" //system clock keys - might rename file
 
+typedef struct {
+  int occupied;    // either true or false
+  pid_t pid;       // process id of this child
+  int startSeconds;// time when it was forked
+  int startNano;   // time when it was forked
+} PCB;
+
+PCB processTable[20];
+
 static void incrementClock(int*, int*);
 static void help();
-//static struct PCB processTable[20]; //not yet
 static int activeWorkers;
 static int workersToLaunch;
 
 int main(int argc, char** argv) {
-  //set default args for options
+  //set default args for options //RESET TO ONE BEFORE SUBMISSION
   int proc = 3;
   int simul = 2;
   int timelim = 2;
@@ -52,23 +59,23 @@ int main(int argc, char** argv) {
   int pshmid_nanoseconds = shmget(SYSCLK_NSKEY, BUFF_SZ, IPC_CREAT | 0666);
 
   if(pshmid_seconds <= 0 || pshmid_nanoseconds <= 0)
-    fatal("Parent failed to create sys clock in shared memory");
+    fatal("Parent failed to create System Clock in shared memory");
   
   //Attach to shared memory
   int * psysClock_seconds = shmat(pshmid_seconds, 0, 0);
   int * psysClock_nanoseconds = shmat(pshmid_nanoseconds, 0, 0);
   
   if (psysClock_seconds <= 0 || psysClock_nanoseconds <= 0) 
-    fatal("Parent failed to attach to Sysclock in shared memory");
+    fatal("Parent failed to attach to System Clock in shared memory");
     
   //initialize system clock to zero
   *psysClock_seconds = 0;
   *psysClock_nanoseconds = 0;
 
   /****************************************************
-   1: create fake args for first worker test
-   2: then process oss input (s and random ns)
-   **max int: 2147483647
+   actual option processing needs to happen at worker launch
+   (random s and random ns)
+   **max int: 2,147,483,647
    **ns to s: 1,000,000,000
    ****************************************************/
    char * s_arg = "4";
@@ -81,25 +88,31 @@ int main(int argc, char** argv) {
   int workersInPCB = proc;
   activeWorkers = 0;
   workersToLaunch = workersInPCB;
-  int w_pid; //wait id
+  int w_pid; //wait id 
   int wstatus;
   
-  while(*psysClock_seconds < 60 && workersToLaunch > 0) {
+  //While PCB table contains waiting processes //SECONDS COUNTER TO BE REPLACED WITH TIMEOUT FUNCTION
+  while(*psysClock_seconds < 60 && (workersToLaunch > 0 || activeWorkers > 0)) {
     incrementClock(psysClock_seconds, psysClock_nanoseconds);
     
-    //output pcb table every .5 sec
-    if (*psysClock_nanoseconds == 500000)
+    //Print PCB table every half second
+    if (*psysClock_nanoseconds % 500000000 == 0)
       printf("\n\twhile pcb table\n\tsec: %d ns: %d\n\n", *psysClock_seconds, *psysClock_nanoseconds);
     
-    if (activeWorkers < simul) {
-      activeWorkers++;
-      printf("\n\tlaunched worker");
+    //Whenever possible, launch a new process
+    if (activeWorkers < simul && workersToLaunch > 0) {
+    
+      //Update PCB Table
+      activeWorkers++;    // REPLACE WITH PCB FUNTIONALITY
+      workersToLaunch--; //remove from PCB
       
-      //fork 1 worker
+      if (VERBOSE == 1) { printf("\n\tworkers waiting: %d workers active: %d\n\t--worker launched\n", workersToLaunch, activeWorkers); }
+      
+      //Fork new process
       pid_t workerPid = fork();
       
-      if (workerPid == 0) {  // in child
-        // terminate if exec call fails
+      //In child process: exec to worker or terminate on failure
+      if (workerPid == 0) {
         char* args[] = {"./worker", s_arg, ns_arg, NULL};
         if (execvp(args[0], args) == -1) {
           perror("execvp");
@@ -107,29 +120,39 @@ int main(int argc, char** argv) {
         }
       } 
     }
-    //for every child process, parent checks whether child is running or finished
-    w_pid = waitpid(-1, &wstatus, WNOHANG); 
-    if(w_pid == 0) { //when a child is running
-      incrementClock(psysClock_seconds, psysClock_nanoseconds);
+    
+    //In parent: as long as there are active workers, monitor their progress
+    if (activeWorkers > 0) {
+      w_pid = waitpid(-1, &wstatus, WNOHANG);
       
-      if (*psysClock_nanoseconds == 500000)
-        printf("\n\tif pcb table\n\tsec: %d ns: %d\n\n", *psysClock_seconds, *psysClock_nanoseconds);
+      //While worker is active, increment system clock
+      if (w_pid == 0) {
+        incrementClock(psysClock_seconds, psysClock_nanoseconds);
         
-      //has child terminated?
-      w_pid = waitpid(-1, &wstatus, WNOHANG); 
-    }  
-    if (w_pid > 0) { //when a child is finished
-      printf("Child process exited with status: %d\n", WEXITSTATUS(wstatus));
-      workersToLaunch--; //remove from PCB
-      activeWorkers--; //remove from active processes
-      printf("\n\tworkers waiting: %d workers active: %d\n", workersToLaunch, activeWorkers);
+        if (*psysClock_nanoseconds % 500000000 == 0)
+          printf("\n\tif pcb table\n\tsec: %d ns: %d\n\n", *psysClock_seconds, *psysClock_nanoseconds);
+      } 
+      //When a worker terminates, update PCB Table
+      else if (w_pid > 0) {          
+        activeWorkers--; //remove from active processes //INSERT PCB
+        
+        if (VERBOSE == 1) {
+          printf("Child process exited with status: %d\n", WEXITSTATUS(wstatus));
+          printf("\n\tworkers waiting: %d workers active: %d\n\t--worker finished\n", workersToLaunch, activeWorkers);
+        }
+        
+      } 
+      //Error in waitpid
+      else {
+        perror("waitpid");
+        fatal("waitpid failed");
+      }
     }
   }
+  
+  if (VERBOSE == 1) { printf("\n\touter: workers waiting: %d workers active: %d\n", workersToLaunch, activeWorkers); }
 
-
- /****************************************************/
- 
-  //detach (in parent and in child)
+  //detach from shared memory
   shmdt(psysClock_seconds);
   shmdt(psysClock_nanoseconds);
   
@@ -147,11 +170,10 @@ static void help() {
 }
 
 static void incrementClock(int * sys_sec, int * sys_nano){
-  if (*sys_nano > 10000000) {
-    //restart nano and add a second
+  if (*sys_nano > 1000000000) {
     *sys_sec += 1;
     *sys_nano = 0;
   } else {
-    *sys_nano += 50;
+    *sys_nano += 1000;
   }
 }

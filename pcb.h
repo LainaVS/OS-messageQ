@@ -11,11 +11,13 @@
 
 #include <unistd.h>
 
-struct PCB {
+typedef struct {
   int occupied;    // either true or false
   pid_t pid;       // process id of this child
   int startSeconds;// time when it was forked
   int startNano;   // time when it was forked
-};
+} PCB;
+
+PCB processTable[20];
 
 #endif

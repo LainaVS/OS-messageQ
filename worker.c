@@ -27,20 +27,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-//#include <stdbool.h>
 #include "validate.h"
 #include "macros.h" //system clock keys - might rename file
 
 static void help();
 
 int main(int argc, char** argv) {
+  //check for appropriate usage
   if(argc < 3) {
     help();
   }
   
-  char * msg; //declare message variable for worker output statements
-  int secondsPassed; //counter to keep track of worker progress //used in loop
-  
+  /***************************************************
+   Attaching worker to the system clock for monitoring. 
+   If any steps fail, print a descriptive error.
+   ***************************************************/
+   
   //set time that worker should be allowed to stay in system
   int sec = arraytoint(argv[1]);
   int nano = arraytoint(argv[2]);
@@ -50,55 +52,58 @@ int main(int argc, char** argv) {
   int shmid_nanoseconds = shmget(SYSCLK_NSKEY, BUFF_SZ, IPC_CREAT | 0444);
 
   if(shmid_seconds <= 0 || shmid_nanoseconds <= 0)
-    fatal("Child failed to create sys clock in shared memory");
+    fatal("Worker failed to create System Clock in shared memory");
   
   //attach to shared memory
   int * sysClock_seconds = shmat(shmid_seconds, 0, 0);
   int * sysClock_nanoseconds = shmat(shmid_nanoseconds, 0, 0);
+  
+  if (sysClock_seconds <= 0 || sysClock_nanoseconds <= 0) 
+    fatal("Worker failed to attach to System Clock in shared memory");
    
-  //store (?start and?) current time
+  //look at system clock and record current time
   int curr_sec = *sysClock_seconds;
   int curr_nano = *sysClock_nanoseconds;
-  int start_sec = curr_sec;    //used in loop
-  //int start_nano = curr_nano; //might not need //used to start loop  
+  int start_sec = curr_sec; 
  
   //calculate termination time
   int term_sec = curr_sec + sec;
   int term_nano = curr_nano + nano;
 
+
+  /***************************************************
+   Worker will continuously print status updates until 
+   it notices the system clock has reached the calculated 
+   termination time. It will print a final update then 
+   exit.
+   ***************************************************/
+  int secondsPassed; //counter to keep track of worker progress
+
   //output a status update at start-up
-  msg = "--Just Starting";
-  printf("\n\tWORKER PID:%d  PPID:%d  SysClockS:%d  SysClockNano:%d  TermTimeS:%d  TermTimeNano:%d \n\t%s\n\n", getpid(), getppid(), *sysClock_seconds, *sysClock_nanoseconds, term_sec, term_nano, msg);
+  printf("\n\tWORKER PID:%d  PPID:%d  SysClockS:%d  SysClockNano:%d  TermTimeS:%d  TermTimeNano:%d \n\t--Just Starting\n\n", getpid(), getppid(), *sysClock_seconds, *sysClock_nanoseconds, term_sec, term_nano);
     
-  
-  /************************************************
-  loop from P1 - testing worker's output ->> not sure if loop correct/placeholder for testing
-  loop until termination time, then final output.
-  *************************************************/
+  //loop until system clock exceeds worker's termination time
   while (*sysClock_seconds <= term_sec) {
-    //check to see if time exceeded by nanoseconds and if yes, exit while loop
+  
+    //special case: if termination second is reached, check whether termination nano has been exceeded
     if (*sysClock_seconds == term_sec && *sysClock_nanoseconds >= term_nano)
       break; 
       
-    //if at least 1 second has passed, output status update.
+    //look at system clock and print status update
     if (curr_sec < *sysClock_seconds) {
-      //update current time vars
+      
       curr_sec = *sysClock_seconds;
       curr_nano = *sysClock_nanoseconds;
-      
-      //either increment secondsPassed or subtract curr_sec - start_sec
       secondsPassed = curr_sec - start_sec;
-      
-      //print output
-      printf("\n\tWORKER PID:%d  PPID:%d  SysClockS:%d  SysClockNano:%d  TermTimeS:%d  TermTimeNano:%d\n", getpid(), getppid(), *sysClock_seconds, *sysClock_nanoseconds, term_sec, term_nano);
-      printf("\t--%d seconds have passed since starting\n", secondsPassed);
+
+      printf("\n\tWORKER PID:%d  PPID:%d  SysClockS:%d  SysClockNano:%d  TermTimeS:%d  TermTimeNano:%d\n\t--%d seconds have passed since starting\n", getpid(), getppid(), curr_sec, curr_nano, term_sec, term_nano, secondsPassed);
     }
   }
-  //final output
-  printf("\n\tWORKER PID:%d  PPID:%d  SysClockS:%d  SysClockNano:%d  TermTimeS:%d  TermTimeNano:%d \n\t--Terminating\n\n", getpid(), getppid(), *sysClock_seconds, *sysClock_nanoseconds, term_sec, term_nano);
-  /************************************************/
   
-  //detach (in parent and in child)
+  //termination condition was met - print final status update
+  printf("\n\tWORKER PID:%d  PPID:%d  SysClockS:%d  SysClockNano:%d  TermTimeS:%d  TermTimeNano:%d \n\t--Terminating\n\n", getpid(), getppid(), *sysClock_seconds, *sysClock_nanoseconds, term_sec, term_nano);
+  
+  //detach from shared memory
   shmdt(sysClock_seconds);
   shmdt(sysClock_nanoseconds);
   
