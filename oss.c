@@ -7,7 +7,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdbool.h>
+#include <time.h>
 #include <unistd.h>
 #include "validate.h"
 #include "macros.h" //system clock keys - might rename file
@@ -22,6 +22,7 @@ typedef struct {
 PCB processTable[20];
 
 static void incrementClock(int*, int*);
+static void generateArgs(int, char*, char*);
 static void help();
 static int activeWorkers;
 static int workersToLaunch;
@@ -30,7 +31,7 @@ int main(int argc, char** argv) {
   //set default args for options //RESET TO ONE BEFORE SUBMISSION
   int proc = 3;
   int simul = 2;
-  int timelim = 2;
+  int timelim = 5;
 
   //parse options
   int option;
@@ -78,8 +79,8 @@ int main(int argc, char** argv) {
    **max int: 2,147,483,647
    **ns to s: 1,000,000,000
    ****************************************************/
-   char * s_arg = "4";
-   char * ns_arg = "2000";
+   char s_arg[50];
+   char ns_arg[50];
    /****************************************************/    
 
   /****************************************************
@@ -96,7 +97,7 @@ int main(int argc, char** argv) {
     incrementClock(psysClock_seconds, psysClock_nanoseconds);
     
     //Print PCB table every half second
-    if (*psysClock_nanoseconds % 500000000 == 0)
+    if (*psysClock_nanoseconds % HALFSECOND_NS == 0)
       printf("\n\twhile pcb table\n\tsec: %d ns: %d\n\n", *psysClock_seconds, *psysClock_nanoseconds);
     
     //Whenever possible, launch a new process
@@ -113,6 +114,7 @@ int main(int argc, char** argv) {
       
       //In child process: exec to worker or terminate on failure
       if (workerPid == 0) {
+        generateArgs(timelim, s_arg, ns_arg);
         char* args[] = {"./worker", s_arg, ns_arg, NULL};
         if (execvp(args[0], args) == -1) {
           perror("execvp");
@@ -129,7 +131,7 @@ int main(int argc, char** argv) {
       if (w_pid == 0) {
         incrementClock(psysClock_seconds, psysClock_nanoseconds);
         
-        if (*psysClock_nanoseconds % 500000000 == 0)
+        if (*psysClock_nanoseconds % HALFSECOND_NS == 0)
           printf("\n\tif pcb table\n\tsec: %d ns: %d\n\n", *psysClock_seconds, *psysClock_nanoseconds);
       } 
       //When a worker terminates, update PCB Table
@@ -170,10 +172,23 @@ static void help() {
 }
 
 static void incrementClock(int * sys_sec, int * sys_nano){
-  if (*sys_nano > 1000000000) {
+  if (*sys_nano > ONESECOND_NS) {
     *sys_sec += 1;
     *sys_nano = 0;
   } else {
     *sys_nano += 1000;
   }
+}
+
+static void generateArgs(int limit, char * arg_s, char * arg_ns) {
+  srand(time(NULL));
+  int a_sec = ((rand() % limit) + 1);
+  int a_ns = ((rand() % ONESECOND_NS) + 1);
+  
+  //convert int variables to char * for processing 
+  //(source https://www.geeksforgeeks.org/sprintf-in-c/)
+  sprintf(arg_s, "%d", a_sec); 
+  sprintf(arg_ns, "%d", a_ns);
+  
+  printf("generated: %ds %dns", a_sec, a_ns);
 }

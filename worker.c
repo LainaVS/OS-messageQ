@@ -67,9 +67,15 @@ int main(int argc, char** argv) {
   int start_sec = curr_sec; 
  
   //calculate termination time
-  int term_sec = curr_sec + sec;
-  int term_nano = curr_nano + nano;
-
+  int term_sec;
+  int term_nano;
+  if ((curr_nano + nano) > ONESECOND_NS) {
+    term_sec = (curr_sec + sec) + 1;
+    term_nano = (curr_nano + nano) - ONESECOND_NS;
+  } else {
+    term_sec = (curr_sec + sec);
+    term_nano = (curr_nano + nano);
+  }
 
   /***************************************************
    Worker will continuously print status updates until 
