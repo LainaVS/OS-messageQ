@@ -26,7 +26,7 @@ typedef struct {
 PCB newPCB(int, int, int, int); 
 PCB updatePCB(PCB, int, int, int*, int*);
 void initializeProcTable(PCB*);
-void printProcTable(PCB*);
+void printProcTable(PCB*, int, int*, int *);
 
 int findPCBEntry(PCB*, int);
 void activatePCB(PCB*, int, int*, int*);

@@ -124,10 +124,8 @@ int stillWorkersToLaunch(PCB* table) {
  * Function to print ProcTable in table format
  * ////for testing allow limiting output - in proj use PROCBUFF////////////////////////
  ********************************************************/
-void printProcTable(PCB * table) {
-  //printf("PID:%d SysClockS: %d SysClockNano: %d", id, sec, nano);
-  printf("\n\tProcess Table:");
-
+void printProcTable(PCB * table, int id, int * sec, int * nano) {
+  printf("\tOSS PID:%d SysClockS: %d SysClockNano: %d\n\tProcess Table:", id, *sec, *nano);
   // Print column headers
   printf("\n\t%-5s %-8s %-8s %-6s %-12s", "Entry", "Occupied", "PID", "StartS", "StartN");
   

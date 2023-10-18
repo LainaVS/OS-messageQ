@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
      
     //Print process table every half second
     if (*psysClock_nanoseconds % HALFSECOND_NS == 0)
-      printProcTable(processTable);
+      printProcTable(processTable, getpid(), psysClock_seconds, psysClock_nanoseconds);
     
     //Whenever possible, launch a new process
     if (activeWorkers < simul && workersToLaunch > 0) {
