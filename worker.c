@@ -5,30 +5,11 @@
 //  Clock
 //---------------------------------------------------
 
-/**********************************************************
- * Child will be worker - exec'd in parent, (need to refactor)
- * worker attaches to shared memory
- * worker args: time to stay in system: s ns (allotedTime)
- *   worker args selected randomly between 1 and -t
- * worker tasks:
- * **save current sysClock time
- * **calculate terminationTarget: currTime + workerArgs
- * **>> output currTime, terminationTarget, 'just starting'
- * **worker loops, 
- *     check sysClock to update currTime
- *     calculate elapsed time
- *     if 1sec elapsed (if prevSec < currSec or more likely: if elapsedSec > 0):
- *        >> output currTime, terminationTarget, timeElapsed
- *     if terminationTarget reached 
- *        >> output currTime, terminationTarget, 'terminating'
- *        terminate
- *********************************************************/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "validate.h"
-#include "macros.h" //system clock keys - might rename file
+#include "macros.h"
 
 static void help();
 
@@ -37,15 +18,15 @@ int main(int argc, char** argv) {
   if(argc < 3) {
     help();
   }
-  
-  /***************************************************
-   Attaching worker to the system clock for monitoring. 
-   If any steps fail, print a descriptive error.
-   ***************************************************/
    
   //set time that worker should be allowed to stay in system
   int sec = arraytoint(argv[1]);
   int nano = arraytoint(argv[2]);
+
+  /***************************************************
+   Attaching worker to the system clock for monitoring. 
+   If any steps fail, print a descriptive error.
+   ***************************************************/
   
   //allocate memory, assign read only permissions
   int shmid_seconds = shmget(SYSCLK_SKEY, BUFF_SZ, IPC_CREAT | 0444);
@@ -77,12 +58,11 @@ int main(int argc, char** argv) {
     term_nano = (curr_nano + nano);
   }
 
-  /***************************************************
-   Worker will continuously print status updates until 
-   it notices the system clock has reached the calculated 
-   termination time. It will print a final update then 
-   exit.
-   ***************************************************/
+  /*********************************************************
+   Worker will continuously print status updates until it 
+   notices the system clock has reached the calculated 
+   termination time. It will print a final update then exit.
+   *********************************************************/
   int secondsPassed; //counter to keep track of worker progress
 
   //output a status update at start-up
