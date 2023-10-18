@@ -10,6 +10,13 @@
 #define PCB_H
 
 #include <unistd.h>
+#include <stdbool.h>
+
+#define PROCBUFF 20
+#define OCCUPIED 1
+#define WAITING 0
+#define EMPTY 0
+#define TERMINATE 0
 
 typedef struct {
   int occupied;    // either true or false
@@ -18,6 +25,16 @@ typedef struct {
   int startNano;   // time when it was forked
 } PCB;
 
-PCB processTable[20];
+PCB newPCB(int, int, int, int); 
+PCB updatePCB(PCB, int, int, int*, int*);
+void initializeProcTable(PCB*, int);
+void printProcTable(PCB*, int, int, int);
+
+int findPCBEntry(PCB*, int);
+void activatePCBInTable(PCB*, int, int*, int*);
+void removeFromProcTable(PCB*, int);
+
+int numOfActiveWorkers(PCB*);
+//int stillWorkersToLaunch(PCB*);
 
 #endif
