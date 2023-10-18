@@ -29,8 +29,8 @@ void initializeProcTable(PCB*);
 void printProcTable(PCB*, int);
 
 int findPCBEntry(PCB*, int);
-//void activatePCBInTable(PCB*, int, int*, int*);
-void removeFromProcTable(PCB*, int);
+void activatePCB(PCB*, int, int*, int*);
+void terminatePCB(PCB*, int);
 
 //int numOfActiveWorkers(PCB*);
 //int stillWorkersToLaunch(PCB*);

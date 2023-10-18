@@ -47,13 +47,12 @@ int findPCBEntry(PCB * table, int id) {
 
 /********************************************************
  * Function to update PCB entry in process table after a
- * new process is launched.
- * Find a PCB that is waiting to be launched.
- /////////////////////////////////////////////////////////////////////////////////////
- * If a waiting block is not found, output error information and exit OR return -1
- /////////////////////////////////////////////////////////////////////////////////////
- ********************************************************
-void activatePCBInTable(PCB * table, int id, int * ss, int * sns) {
+ * new process is launched. Find first proccess block without 
+ * a child attached (PID is 0 (EMPTY)). Swith PCB to OCCUPIED (1)
+ * record child pid, start seconds, and start ns.
+ * If all process blocks have a child attached, CAUSE A PROBLEM////////////////////////
+ ********************************************************/
+void activatePCB(PCB * table, int id, int * ss, int * sns) {
   int index = findPCBEntry(table, EMPTY);
   if (index >= 0) {
     table[index] = updatePCB(table[index], OCCUPIED, id, ss, sns); 
@@ -63,7 +62,7 @@ void activatePCBInTable(PCB * table, int id, int * ss, int * sns) {
 //////////////////////////////////////////////////////////////////////////////////////
   }
 }
- ********************************************************/
+
 
 /********************************************************
  * Function to indicate the process attached to a specific 
@@ -74,7 +73,7 @@ void activatePCBInTable(PCB * table, int id, int * ss, int * sns) {
  * If the id is not found, output error information and exit OR return -1
  /////////////////////////////////////////////////////////////////////////////////////
  ********************************************************/
-void removeFromProcTable(PCB * table, int id) {
+void terminatePCB(PCB * table, int id) {
   int index = findPCBEntry(table, id);
   if (index > -1) {
     table[index].occupied = TERMINATED;

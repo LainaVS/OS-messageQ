@@ -13,7 +13,7 @@
 #define BUFF_SZ sizeof(int)
 
 //toggle output for development: 1 for MORE output
-#define VERBOSE 1
+#define VERBOSE 0
 
 //time constants
 #define ONESECOND_NS 1000000000

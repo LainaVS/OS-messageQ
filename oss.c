@@ -24,7 +24,7 @@ static int workersToLaunch;
 int main(int argc, char** argv) {
   //set default args for options //RESET TO ONE BEFORE SUBMISSION
   int proc = 3;
-  int simul = 2;
+  int simul = 1;
   int timelim = 5;
 
   //parse options
@@ -80,28 +80,28 @@ int main(int argc, char** argv) {
   /****************************************************
    for testing with worker: fork and exec single worker
    ****************************************************/
-  int workersInPCB = proc;
-  activeWorkers = 0;
-  workersToLaunch = workersInPCB;
   int w_pid; //wait id 
   int wstatus;
+  activeWorkers = 0;
+  workersToLaunch = proc;
   
   initializeProcTable(processTable);
   printProcTable(processTable, 5);
   
   time_t startTime = time(NULL);
-  //While PCB table contains waiting processes //SECONDS COUNTER TO BE REPLACED WITH TIMEOUT FUNCTION
+  //While PCB table contains waiting processes
   while((workersToLaunch > 0 || activeWorkers > 0)) {
     incrementClock(psysClock_seconds, psysClock_nanoseconds);
     
-    time_t endTime = time(NULL);
-    if ((endTime - startTime) > 10) {
+    time_t progRunTime = time(NULL) - startTime;
+    if (progRunTime > 3) {
       //clean up processes and exit
       fatal("timeout");
     }
+    
     //Print PCB table every half second
     if (*psysClock_nanoseconds % HALFSECOND_NS == 0)
-      printf("\n\twhile pcb table\n\tsec: %d ns: %d\n\n", *psysClock_seconds, *psysClock_nanoseconds);
+      printProcTable(processTable, 5);
     
     //Whenever possible, launch a new process
     if (activeWorkers < simul && workersToLaunch > 0) {
@@ -123,8 +123,16 @@ int main(int argc, char** argv) {
           perror("execvp");
           fatal("exec call failed");
         }
-      } 
-    }
+      } //end if child (==0)
+      //in parent
+      else if (workerPid > 0) {
+        if (VERBOSE == 1) { printf("---IN FIRST > 0 --- CHILDPID: %d\n", workerPid); }
+        
+        //add process block to process table
+        activatePCB(processTable, workerPid, psysClock_seconds, psysClock_nanoseconds);
+        
+      }
+    } //end if active < simul
     
     //In parent: as long as there are active workers, monitor their progress
     if (activeWorkers > 0) {
@@ -132,18 +140,25 @@ int main(int argc, char** argv) {
       
       //While worker is active, increment system clock
       if (w_pid == 0) {
-        incrementClock(psysClock_seconds, psysClock_nanoseconds);
+        if (VERBOSE == 1) { printf("---IN == 0 --- PID: %d\n", getpid()); }
         
-        if (*psysClock_nanoseconds % HALFSECOND_NS == 0)
-          printf("\n\tif pcb table\n\tsec: %d ns: %d\n\n", *psysClock_seconds, *psysClock_nanoseconds);
+        incrementClock(psysClock_seconds, psysClock_nanoseconds);        
+        //print process table every half second
+        if (*psysClock_nanoseconds % HALFSECOND_NS == 0) {
+          printProcTable(processTable, 5);
+        }
       } 
       //When a worker terminates, update PCB Table
       else if (w_pid > 0) {          
         activeWorkers--; //remove from active processes //INSERT PCB
+        //terminate process block
+        
+        terminatePCB(processTable, w_pid);
         
         if (VERBOSE == 1) {
           printf("Child process exited with status: %d\n", WEXITSTATUS(wstatus));
           printf("\n\tworkers waiting: %d workers active: %d\n\t--worker finished\n", workersToLaunch, activeWorkers);
+          printProcTable(processTable, 5);
         }
         
       } 
@@ -152,8 +167,8 @@ int main(int argc, char** argv) {
         perror("waitpid");
         fatal("waitpid failed");
       }
-    }
-  }
+    } //end if active workers > 0
+  } //end while worker processes remaining (main loop)
   
   if (VERBOSE == 1) { printf("\n\touter: workers waiting: %d workers active: %d\n", workersToLaunch, activeWorkers); }
 
