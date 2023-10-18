@@ -10,16 +10,10 @@
 #include <time.h>
 #include <unistd.h>
 #include "validate.h"
+#include "pcb.h"
 #include "macros.h" //system clock keys - might rename file
 
-typedef struct {
-  int occupied;    // either true or false
-  pid_t pid;       // process id of this child
-  int startSeconds;// time when it was forked
-  int startNano;   // time when it was forked
-} PCB;
-
-PCB processTable[20];
+PCB processTable[PROCBUFF];
 
 static void incrementClock(int*, int*);
 static void generateArgs(int, char*, char*);
@@ -74,8 +68,8 @@ int main(int argc, char** argv) {
   *psysClock_nanoseconds = 0;
 
   /****************************************************
-   actual option processing needs to happen at worker launch
-   (random s and random ns)
+   character arrays to hold random time args
+    to send to worker
    **max int: 2,147,483,647
    **ns to s: 1,000,000,000
    ****************************************************/
@@ -92,10 +86,19 @@ int main(int argc, char** argv) {
   int w_pid; //wait id 
   int wstatus;
   
+  initializeProcTable(processTable);
+  printProcTable(processTable, 5);
+  
+  time_t startTime = time(NULL);
   //While PCB table contains waiting processes //SECONDS COUNTER TO BE REPLACED WITH TIMEOUT FUNCTION
-  while(*psysClock_seconds < 60 && (workersToLaunch > 0 || activeWorkers > 0)) {
+  while((workersToLaunch > 0 || activeWorkers > 0)) {
     incrementClock(psysClock_seconds, psysClock_nanoseconds);
     
+    time_t endTime = time(NULL);
+    if ((endTime - startTime) > 10) {
+      //clean up processes and exit
+      fatal("timeout");
+    }
     //Print PCB table every half second
     if (*psysClock_nanoseconds % HALFSECOND_NS == 0)
       printf("\n\twhile pcb table\n\tsec: %d ns: %d\n\n", *psysClock_seconds, *psysClock_nanoseconds);
@@ -176,12 +179,12 @@ static void incrementClock(int * sys_sec, int * sys_nano){
     *sys_sec += 1;
     *sys_nano = 0;
   } else {
-    *sys_nano += 1000;
+    *sys_nano += 500;
   }
 }
 
 static void generateArgs(int limit, char * arg_s, char * arg_ns) {
-  srand(time(NULL));
+  srand(getpid());
   int a_sec = ((rand() % limit) + 1);
   int a_ns = ((rand() % ONESECOND_NS) + 1);
   
