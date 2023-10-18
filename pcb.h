@@ -32,7 +32,6 @@ int findPCBEntry(PCB*, int);
 void activatePCB(PCB*, int, int*, int*);
 void terminatePCB(PCB*, int);
 
-//int numOfActiveWorkers(PCB*);
-//int stillWorkersToLaunch(PCB*);
+int numOfActiveWorkers(PCB*);
 
 #endif

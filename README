@@ -15,18 +15,22 @@ With defaults:
 > ./oss
 
 With args:
-> ./oss -n5 -s2 -t2
+> ./oss -n 5 -s 2 -t 4
 
 
 Notes:
-No options are required. Default argument for all options is 1.
-Program runs as expected and user is limited to argument values not greater than 10.
+No options are required. Default argument for n and s is 1, default argument for t is 3.
+Program runs as expected and user argument values are not limited in this version.
 
 
 Problems encountered during development:
-When trying to implement the -s simul restriction I had some trouble launching the 
-worker sets reliably. I also had some trouble with the parent terminating before the
-childern finished launching.
+During implementation I encountered issues with implementing pcb.h and pcb.c in oss.c. 
+pcb.h and .c were developed and tested separately from main program, to simplify the testing process.
+When functions were added to oss, I unintentially created an infinite loop. I reverted back to 
+the original working version of oss and implemented each PCB feature individually for incremental testing
+--the issue turned out to be my decision to place the process table updates inside of the child process.
+But since I had already removed most of the functions from the program, I kept the variable counters for 
+this version. In future projects I will probably reincorperatate the functions I created for pcb operations.
 
-After some rearranging I implemented a for loop in oss.c (lines 80 - 82) to ensure the 
-parent would wait until every batch of workers was launched.
+git:
+https://comp.umsl.edu/gitlab/emrwc6/4760-oss-p2

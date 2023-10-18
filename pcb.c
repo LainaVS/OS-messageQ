@@ -49,17 +49,15 @@ int findPCBEntry(PCB * table, int id) {
  * Function to update PCB entry in process table after a
  * new process is launched. Find first proccess block without 
  * a child attached (PID is 0 (EMPTY)). Swith PCB to OCCUPIED (1)
- * record child pid, start seconds, and start ns.
- * If all process blocks have a child attached, CAUSE A PROBLEM////////////////////////
+ * record child pid, start seconds, and start ns. If all 
+ * process blocks have a child attached, output error information. //change later
  ********************************************************/
 void activatePCB(PCB * table, int id, int * ss, int * sns) {
   int index = findPCBEntry(table, EMPTY);
   if (index >= 0) {
     table[index] = updatePCB(table[index], OCCUPIED, id, ss, sns); 
   } else {
-//////////////////////////////////////////////////////////////////////////////////////
     printf("process table full\n");
-//////////////////////////////////////////////////////////////////////////////////////
   }
 }
 
@@ -69,67 +67,42 @@ void activatePCB(PCB * table, int id, int * ss, int * sns) {
  * PCB has terminated. Search process table for the id of 
  * terminated process. Set occupied to 0 (TERMINATED) but 
  * keep process data.
-  /////////////////////////////////////////////////////////////////////////////////////
- * If the id is not found, output error information and exit OR return -1
- /////////////////////////////////////////////////////////////////////////////////////
+ * If the id is not found, output error information. //change later
  ********************************************************/
 void terminatePCB(PCB * table, int id) {
   int index = findPCBEntry(table, id);
   if (index > -1) {
     table[index].occupied = TERMINATED;
   } else {
-//////////////////////////////////////////////////////////////////////////////////////
     printf("process does not exist");
-//////////////////////////////////////////////////////////////////////////////////////
   }
 }
 
 /********************************************************
- * Functions to check status of processes in PCB
+ * Function to count the number of active processes in the 
+ * process table. Count only occupied PCBs.
  ********************************************************/
-/********************************************************
- * count the number of active processes in the process table
- * look for occupied PCBs that are not waiting for a child 
- * to attach. (pid > 0) Return the total active procs
- ********************************************************
 int numOfActiveWorkers(PCB * table) {
   int active = 0;
   for(int i = 0; i < PROCBUFF; i++) {
     if (table[i].occupied == OCCUPIED) {
-      if (table[i].pid > EMPTY)
-        active++;
+      active++;
     }
   } 
   return active;
 }
- ********************************************************/
-
-/********************************************************
- * Search Process Table for any occupied PCBs that have a 
- * wait status (pid = 0). If any PCBs are found waiting
- * return occupied (1) (at least one occupied block is waiting), 
- * else return empty (0) (any remaining PCBs are unoccupied)
- ********************************************************
-int stillWorkersToLaunch(PCB* table) {
-  int waitingProc = findPCBEntry(table, WAITING);
-  if (waitingProc >= 0) //if index is found
-    return OCCUPIED;
-  else
-    return EMPTY;
-}
- ********************************************************/
 
 
 /********************************************************
- * Function to print ProcTable in table format
- * ////for testing allow limiting output - in proj use PROCBUFF////////////////////////
+ * Function to print complete ProcTable in table format
  ********************************************************/
 void printProcTable(PCB * table, int id, int * sec, int * nano) {
+  //print parent information
   printf("\tOSS PID:%d SysClockS: %d SysClockNano: %d\n\tProcess Table:", id, *sec, *nano);
-  // Print column headers
+  
+  //print table
   printf("\n\t%-5s %-8s %-8s %-6s %-12s", "Entry", "Occupied", "PID", "StartS", "StartN");
   
-  // Print table rows
   for (int row = 0; row < PROCBUFF; row++)
     printf("\n\t%-5d %-8d %-8d %-6d %-12d", row, table[row].occupied, table[row].pid, table[row].startSeconds, table[row].startNano);
   

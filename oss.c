@@ -80,12 +80,11 @@ int main(int argc, char** argv) {
   activeWorkers = 0;         //counter variables
   workersToLaunch = proc;
     
-  /**********************************************************
-   main operation: Loop to fork child processes until all
-   processes have completed. Process launching must obey 
-   simultaneous restriction proveided by user.
-   Uses a simulated time function to increment shared clock.
-   **********************************************************/
+  /*******************************************************************
+   main operation: Loop to fork child processes until all Processes have 
+   completed. Process launching must obey simultaneous restriction provided
+   by user. uses a simulated time function to increment shared clock.
+   *******************************************************************/
   initializeProcTable(processTable);
   
   time_t startTime = time(NULL);
@@ -93,7 +92,7 @@ int main(int argc, char** argv) {
   
     //timeout - should handle process clean up - should be implemented with timeoutsignal
     time_t progRunTime = time(NULL) - startTime;
-    if (progRunTime > 10) {
+    if (progRunTime > 60) {
       fatal("timeout");
     }
     
@@ -106,14 +105,14 @@ int main(int argc, char** argv) {
     //Whenever possible, launch a new process
     if (activeWorkers < simul && workersToLaunch > 0) {
     
-      //Update counter variables
+      //Keep track of active and waiting worker processes
       activeWorkers++;    
       workersToLaunch--;
             
       //Fork new process
       pid_t runningWorker_pid = fork();
       
-      //In child process, start worker
+      //In child process: exec to worker
       if (runningWorker_pid == 0) {
         generateArgs(timelim, s_arg, ns_arg);
         char* args[] = {"./worker", s_arg, ns_arg, NULL};
@@ -122,7 +121,7 @@ int main(int argc, char** argv) {
           fatal("exec call failed");
         }
       }
-      //In parent process, update process table
+      //In parent process: update process table
       else if (runningWorker_pid > 0) {
         activatePCB(processTable, runningWorker_pid, psysClock_seconds, psysClock_nanoseconds);
       }
@@ -133,10 +132,8 @@ int main(int argc, char** argv) {
       terminatedWorker_pid = waitpid(-1, &wstatus, WNOHANG);
       
       //When parent sees worker has terminated, update the process Table
-      if (terminatedWorker_pid > 0) {          
-        activeWorkers--; //remove from active processes
-        
-        //terminate process block
+      if (terminatedWorker_pid > 0) {       
+        activeWorkers--;
         terminatePCB(processTable, terminatedWorker_pid);
       } 
       //Error in waitpid
