@@ -17,8 +17,8 @@
 void fatal(char*);
 int arraytoint(char*);
 
-void myhandler(int);
-int setupinterrupt(void);
-int setupitimer(void);
+//void myhandler(int);
+//int setupinterrupt(void);
+//int setupitimer(void);
 
 #endif

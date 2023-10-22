@@ -9,19 +9,26 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
+#include <signal.h>
+#include <sys/time.h>
 #include "errorUtils.h"
 #include "pcb.h"
-#include "macros.h"
+#include "macros.h" 
 
-//clock globals
-static int * psysClock_seconds;
-static int * psysClock_nanoseconds;
-static int pshmid_seconds;
-static int pshmid_nanoseconds;
-
+//prototypes
 static void incrementClock(int*, int*);
 static void generateArgs(int, char*, char*);
 static void help();
+void myhandler(int);
+int setupinterrupt(void);
+int setupitimer(void);
+
+//clock globals
+static int pshmid_seconds;
+static int pshmid_nanoseconds;
+static int * psysClock_seconds;
+static int * psysClock_nanoseconds;
 
 int main(int argc, char** argv) {
   //set default args for options
@@ -90,20 +97,20 @@ int main(int argc, char** argv) {
   char ns_arg[50];  
   int terminatedWorker_pid;  //wait pid
   int wstatus;               //wait status 
-  int activeWorkers = 0;         //counter variables
+  int activeWorkers = 0;     //counter variables
   int workersToLaunch = proc;
   
   /****************************************
    signal handling and timeout
    ****************************************/
- 		if (setupinterrupt() == -1) {
-				perror("Failed to set up handler for SIGPROF");
-				return 1;
-		}
-		if (setupitimer() == -1) {
-				perror("Failed to set up the ITIMER_PROF interval timer");
-				return 1;
-		}
+  if (setupinterrupt() == -1) {
+  	perror("Failed to set up handler for SIGPROF");
+  	return 1;
+  }
+  if (setupitimer() == -1) {
+  	perror("Failed to set up the ITIMER_PROF interval timer");
+  	return 1;
+  }
     
   /*******************************************************************
    main operation: Loop to fork child processes until all Processes have 
@@ -111,15 +118,7 @@ int main(int argc, char** argv) {
    by user. uses a simulated time function to increment shared clock.
    *******************************************************************/
 
-  
-  time_t startTime = time(NULL);
-  while((workersToLaunch > 0 || activeWorkers > 0)) {
-    //timeout - should handle process clean up - should be implemented with timeoutsignal
-    time_t progRunTime = time(NULL) - startTime;
-    if (progRunTime > 60) {
-      fatal("timeout");
-    }
-    
+  while((workersToLaunch > 0 || activeWorkers > 0)) {    
     incrementClock(psysClock_seconds, psysClock_nanoseconds);
      
     //Print process table every half second
@@ -213,32 +212,32 @@ static void generateArgs(int limit, char * arg_s, char * arg_ns) {
  The following functions were provided by Mark Hauschild 
  Course: 4760 Fall23
  File: periodicasterik.c 
- Kills processes and terminates program successfully at 
- timeout and ^C 
+ Kills processes successfully at timeout and ^C 
+ All processes cleaned up before exiting program
  ********************************************************/
- /*******************************************************
-  PENDING ISSUES 
-  --DOES NOT CLEAR SHARED MEM SEG - MUST RUN MEMCLEAR.SH
-  --ALSO DOES NOT OUTPUT ERROR INFORMATION AT TIMEOUT
-  *******************************************************/
 void myhandler(int s) {
 	int errsave;
-	errsave = errno;
- 
-  write(STDERR_FILENO, &errsave, 1);
-  printf("terminating"); ////////////////////THIS SHOULD CHANGE
+  errsave = errno;
+    
+  fprintf(stderr, "\n\n\tCleaning up processes and terminating...\n\n"); 
  
   //find and kill any running children
   for(int i = 0; i < PROCBUFF; i++) {
     if (processTable[i].occupied == OCCUPIED)
-      kill(processTable[i].pid, SIGINT);
+      kill(processTable[i].pid, SIGTERM);
   }
+  
+  //detach from shared memory 
+  shmdt(psysClock_seconds);
+  shmdt(psysClock_nanoseconds);
   
   //free shared memory segment
   shmctl(pshmid_seconds, IPC_RMID, NULL);
   shmctl(pshmid_nanoseconds, IPC_RMID, NULL);
   
+
   errno = errsave;
+  exit(1); 
 }
 
 int setupinterrupt(void) { /* set up myhandler for SIGPROF */
