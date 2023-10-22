@@ -9,6 +9,11 @@
 #include "pcb.h"
 
 /********************************************************
+ * Define a global Process Table
+ ********************************************************/
+PCB processTable[PROCBUFF] ={ {0, 0, 0, 0} };
+
+/********************************************************
  * Create and initialize a new Process Control Block
  ********************************************************/
 PCB newPCB(int occ, int id, int ss, int sns) {

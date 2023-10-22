@@ -3,7 +3,7 @@ CFLAGS  = -g3 -Wall -Wshadow
 TARGET1 = worker
 TARGET2 = oss 
 
-OBJS1	= worker.o errorUtils.o
+OBJS1	= worker.o errorUtils.o pcb.o
 OBJS2	= oss.o errorUtils.o pcb.o
 
 all:	$(TARGET1) $(TARGET2)

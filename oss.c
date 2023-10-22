@@ -11,15 +11,17 @@
 #include <unistd.h>
 #include "errorUtils.h"
 #include "pcb.h"
-#include "macros.h" 
+#include "macros.h"
 
-PCB processTable[PROCBUFF];
+//clock globals
+static int * psysClock_seconds;
+static int * psysClock_nanoseconds;
+static int pshmid_seconds;
+static int pshmid_nanoseconds;
 
 static void incrementClock(int*, int*);
 static void generateArgs(int, char*, char*);
 static void help();
-static int activeWorkers;
-static int workersToLaunch;
 
 int main(int argc, char** argv) {
   //set default args for options
@@ -63,15 +65,15 @@ int main(int argc, char** argv) {
    **********************************************************/  
     
   //allocate memory to shared keys
-  int pshmid_seconds = shmget(SYSCLK_SKEY, BUFF_SZ, IPC_CREAT | 0666);
-  int pshmid_nanoseconds = shmget(SYSCLK_NSKEY, BUFF_SZ, IPC_CREAT | 0666);
+  pshmid_seconds = shmget(SYSCLK_SKEY, BUFF_SZ, IPC_CREAT | 0666);
+  pshmid_nanoseconds = shmget(SYSCLK_NSKEY, BUFF_SZ, IPC_CREAT | 0666);
 
   if(pshmid_seconds <= 0 || pshmid_nanoseconds <= 0)
     fatal("Parent failed to create System Clock in shared memory");
   
   //Attach to shared memory
-  int * psysClock_seconds = shmat(pshmid_seconds, 0, 0);
-  int * psysClock_nanoseconds = shmat(pshmid_nanoseconds, 0, 0);
+  psysClock_seconds = shmat(pshmid_seconds, 0, 0);
+  psysClock_nanoseconds = shmat(pshmid_nanoseconds, 0, 0);
   
   if (psysClock_seconds <= 0 || psysClock_nanoseconds <= 0) 
     fatal("Parent failed to attach to System Clock in shared memory");
@@ -80,20 +82,35 @@ int main(int argc, char** argv) {
   *psysClock_seconds = 0;
   *psysClock_nanoseconds = 0;
 
-  
+  /***********************************************************/ //testing clock in shared file
+
+  //declare and initialize program variables
+  initializeProcTable(processTable);
   char s_arg[50];            //char arrays to store time arguments for worker process
   char ns_arg[50];  
   int terminatedWorker_pid;  //wait pid
   int wstatus;               //wait status 
-  activeWorkers = 0;         //counter variables
-  workersToLaunch = proc;
+  int activeWorkers = 0;         //counter variables
+  int workersToLaunch = proc;
+  
+  /****************************************
+   signal handling and timeout
+   ****************************************/
+ 		if (setupinterrupt() == -1) {
+				perror("Failed to set up handler for SIGPROF");
+				return 1;
+		}
+		if (setupitimer() == -1) {
+				perror("Failed to set up the ITIMER_PROF interval timer");
+				return 1;
+		}
     
   /*******************************************************************
    main operation: Loop to fork child processes until all Processes have 
    completed. Process launching must obey simultaneous restriction provided
    by user. uses a simulated time function to increment shared clock.
    *******************************************************************/
-  initializeProcTable(processTable);
+
   
   time_t startTime = time(NULL);
   while((workersToLaunch > 0 || activeWorkers > 0)) {
@@ -189,4 +206,52 @@ static void generateArgs(int limit, char * arg_s, char * arg_ns) {
   sprintf(arg_ns, "%d", a_ns);
   
   printf("generated: %ds %dns", a_sec, a_ns);
+}
+
+
+/******************************************************** 
+ The following functions were provided by Mark Hauschild 
+ Course: 4760 Fall23
+ File: periodicasterik.c 
+ Kills processes and terminates program successfully at 
+ timeout and ^C 
+ ********************************************************/
+ /*******************************************************
+  PENDING ISSUES 
+  --DOES NOT CLEAR SHARED MEM SEG - MUST RUN MEMCLEAR.SH
+  --ALSO DOES NOT OUTPUT ERROR INFORMATION AT TIMEOUT
+  *******************************************************/
+void myhandler(int s) {
+	int errsave;
+	errsave = errno;
+ 
+  write(STDERR_FILENO, &errsave, 1);
+  printf("terminating"); ////////////////////THIS SHOULD CHANGE
+ 
+  //find and kill any running children
+  for(int i = 0; i < PROCBUFF; i++) {
+    if (processTable[i].occupied == OCCUPIED)
+      kill(processTable[i].pid, SIGINT);
+  }
+  
+  //free shared memory segment
+  shmctl(pshmid_seconds, IPC_RMID, NULL);
+  shmctl(pshmid_nanoseconds, IPC_RMID, NULL);
+  
+  errno = errsave;
+}
+
+int setupinterrupt(void) { /* set up myhandler for SIGPROF */
+  struct sigaction act;
+  act.sa_handler = myhandler;
+  act.sa_flags = 0;
+  return (sigemptyset(&act.sa_mask) || sigaction(SIGPROF, &act, NULL) || sigaction(SIGINT, &act, NULL) || sigaction(SIGTERM, &act, NULL));
+}
+
+int setupitimer(void) { /* set ITIMER_PROF for 60-second intervals */
+  struct itimerval value;
+  value.it_interval.tv_sec = 60;
+  value.it_interval.tv_usec = 0;
+  value.it_value = value.it_interval;
+  return (setitimer(ITIMER_PROF, &value, NULL));
 }

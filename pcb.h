@@ -23,6 +23,8 @@ typedef struct {
   int startNano;   // time when it was forked
 } PCB;
 
+extern PCB processTable[];
+
 PCB newPCB(int, int, int, int); 
 PCB updatePCB(PCB, int, int, int*, int*);
 void initializeProcTable(PCB*);
