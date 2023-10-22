@@ -1,12 +1,12 @@
 //---------------------------------------------------
 //  Elaina Rohlfing
-//  October 5, 2023
+//  October 12th 2023
 //  4760 001 
-//  Clock
+//  Project 3 - Message Queues
 //---------------------------------------------------
 
-#ifndef VALIDATE_h
-#define VALIDATE_h
+#ifndef ERRORUTILS_H
+#define ERRORUTILS_H
 
 void fatal(char*);
 int arraytoint(char*);

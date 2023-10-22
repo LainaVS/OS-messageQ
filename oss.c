@@ -1,15 +1,15 @@
 //---------------------------------------------------
 //  Elaina Rohlfing
-//  October 5, 2023
+//  October 12th 2023
 //  4760 001 
-//  Clock
+//  Project 3 - Message Queues
 //---------------------------------------------------
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
-#include "validate.h"
+#include "errorUtils.h"
 #include "pcb.h"
 #include "macros.h" 
 
@@ -26,10 +26,11 @@ int main(int argc, char** argv) {
   int proc = 1;
   int simul = 1;
   int timelim = 3;
+  char * logfile = "log.txt";
 
   //parse options
   int option;
-  while ((option = getopt(argc, argv, "hn:s:t: ")) != -1) {
+  while ((option = getopt(argc, argv, "hn:s:t:f: ")) != -1) {
     switch(option) {
       case 'h':  
         help();
@@ -43,12 +44,19 @@ int main(int argc, char** argv) {
       case 't':
         timelim = arraytoint(optarg);  //set timelimit for worker runtime
         break;
+      case 'f':
+        logfile = optarg;              //set name for file that will store output
+        break;
       case '?':
 
       return 1;
     }
   }
   
+  if (VERBOSE == 1) { 
+    printf("\n\n\tOSS will run %d workers. Workers will run up to %d seconds.\n\tMaximum of %d simultaneous workers allowed in system.\n\tOSS output will be recorded in %s file.\n\n", proc, timelim, simul, logfile); 
+    }
+    
   /**********************************************************
    create and intialize system clock to simulate time.
    If any steps fail, print a descriptive error.
@@ -89,7 +97,6 @@ int main(int argc, char** argv) {
   
   time_t startTime = time(NULL);
   while((workersToLaunch > 0 || activeWorkers > 0)) {
-  
     //timeout - should handle process clean up - should be implemented with timeoutsignal
     time_t progRunTime = time(NULL) - startTime;
     if (progRunTime > 60) {
@@ -123,6 +130,7 @@ int main(int argc, char** argv) {
       }
       //In parent process: update process table
       else if (runningWorker_pid > 0) {
+        sleep(1);
         activatePCB(processTable, runningWorker_pid, psysClock_seconds, psysClock_nanoseconds);
       }
     }
@@ -132,7 +140,7 @@ int main(int argc, char** argv) {
       terminatedWorker_pid = waitpid(-1, &wstatus, WNOHANG);
       
       //When parent sees worker has terminated, update the process Table
-      if (terminatedWorker_pid > 0) {       
+      if (terminatedWorker_pid > 0) {
         activeWorkers--;
         terminatePCB(processTable, terminatedWorker_pid);
       } 
@@ -166,7 +174,7 @@ static void incrementClock(int * sys_sec, int * sys_nano){
     *sys_sec += 1;
     *sys_nano = 0;
   } else {
-    *sys_nano += 1000;
+    *sys_nano += 1000; 
   }
 }
 

@@ -3,8 +3,8 @@ CFLAGS  = -g3 -Wall -Wshadow
 TARGET1 = worker
 TARGET2 = oss 
 
-OBJS1	= worker.o validate.o
-OBJS2	= oss.o validate.o pcb.o
+OBJS1	= worker.o errorUtils.o
+OBJS2	= oss.o errorUtils.o pcb.o
 
 all:	$(TARGET1) $(TARGET2)
 
@@ -20,8 +20,8 @@ worker.o:	worker.c macros.h
 oss.o:		oss.c macros.h
 	$(CC) $(CFLAGS) -c oss.c macros.h
  
-validate.o:	validate.c validate.h
-	$(CC) $(CFLAGS) -c validate.c validate.h
+errorUtils.o:	errorUtils.c errorUtils.h
+	$(CC) $(CFLAGS) -c errorUtils.c errorUtils.h
 
 pcb.o:		pcb.c pcb.h
 	$(CC) $(CFLAGS) -c pcb.c pcb.h

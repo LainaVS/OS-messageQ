@@ -1,13 +1,13 @@
 //---------------------------------------------------
 //  Elaina Rohlfing
-//  October 5, 2023
+//  October 12th 2023
 //  4760 001 
-//  Clock
+//  Project 3 - Message Queues
 //---------------------------------------------------
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "validate.h"
+#include "errorUtils.h"
 
 void fatal(char * msg) {
   fprintf(stderr, "\n\n\t%s\n\tExiting program.\n\n", msg);

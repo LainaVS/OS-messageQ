@@ -1,3 +1,10 @@
+//---------------------------------------------------
+//  Elaina Rohlfing
+//  October 12th 2023
+//  4760 001 
+//  Project 3 - Message Queues
+//---------------------------------------------------
+
 #ifndef OSS_H
 #define OSS_H
 
@@ -13,7 +20,7 @@
 #define BUFF_SZ sizeof(int)
 
 //toggle output for development: 1 for MORE output
-#define VERBOSE 0
+#define VERBOSE 1
 
 //time constants
 #define ONESECOND_NS 1000000000

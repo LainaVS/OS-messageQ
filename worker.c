@@ -1,14 +1,14 @@
 //---------------------------------------------------
 //  Elaina Rohlfing
-//  October 5, 2023
+//  October 12th 2023
 //  4760 001 
-//  Clock
+//  Project 3 - Message Queues
 //---------------------------------------------------
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "validate.h"
+#include "errorUtils.h"
 #include "macros.h"
 
 static void help();
