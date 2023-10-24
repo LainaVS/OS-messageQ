@@ -12,9 +12,24 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/wait.h>
 #include "errorUtils.h"
 #include "pcb.h"
 #include "macros.h" 
+
+
+//message queue
+#define PERMS 0644
+typedef struct {
+	long mtype;  //used by msg send and recieve (but not SENT)
+	int intData; //int data sent by child
+} msgbuffer;
+
+//message queue globals
+static int msqid;
 
 //prototypes
 static void incrementClock(int*, int*);
@@ -36,6 +51,10 @@ int main(int argc, char** argv) {
   int simul = 1;
   int timelim = 3;
   char * logfile = "log.txt";
+  
+  //message queue variables
+ 	msgbuffer buf0, buf1;
+	key_t key;
 
   //parse options
   int option;
@@ -61,6 +80,27 @@ int main(int argc, char** argv) {
       return 1;
     }
   }
+  
+  /**********************************************************
+   Setting up message queue
+   **********************************************************/
+    
+  // get a key for our message queue - use program file to create unique key
+	if ((key = ftok("oss", 1)) == -1) {
+		perror("ftok");
+		exit(1);
+	}
+ 
+	// create our message queue 
+	if ((msqid = msgget(key, PERMS | IPC_CREAT)) == -1) {
+		perror("msgget in parent");
+		exit(1);
+	}
+ 
+  printf("\n\n\t******\n\tMessage queue set up\n");
+  
+  
+ 
   
   if (VERBOSE == 1) { 
     printf("\n\n\tOSS will run %d workers. Workers will run up to %d seconds.\n\tMaximum of %d simultaneous workers allowed in system.\n\tOSS output will be recorded in %s file.\n\n", proc, timelim, simul, logfile); 
@@ -89,7 +129,7 @@ int main(int argc, char** argv) {
   *psysClock_seconds = 0;
   *psysClock_nanoseconds = 0;
 
-  /***********************************************************/ //testing clock in shared file
+  /***********************************************************/ //end clock initialization
 
   //declare and initialize program variables
   initializeProcTable(processTable);
@@ -100,9 +140,11 @@ int main(int argc, char** argv) {
   int activeWorkers = 0;     //counter variables
   int workersToLaunch = proc;
   
-  /****************************************
-   signal handling and timeout
-   ****************************************/
+  /********************************************************************
+   signal handling and timeout 
+   -- cleans up procs and detaches from mem. Therefore is placed after 
+   process table initialization and attaching to shared memory.
+   ********************************************************************/
   if (setupinterrupt() == -1) {
   	perror("Failed to set up handler for SIGPROF");
   	return 1;
@@ -110,8 +152,8 @@ int main(int argc, char** argv) {
   if (setupitimer() == -1) {
   	perror("Failed to set up the ITIMER_PROF interval timer");
   	return 1;
-  }
-    
+  }  
+  
   /*******************************************************************
    main operation: Loop to fork child processes until all Processes have 
    completed. Process launching must obey simultaneous restriction provided
@@ -139,6 +181,7 @@ int main(int argc, char** argv) {
       if (runningWorker_pid == 0) {
         generateArgs(timelim, s_arg, ns_arg);
         char* args[] = {"./worker", s_arg, ns_arg, NULL};
+        
         if (execvp(args[0], args) == -1) {
           perror("execvp");
           fatal("exec call failed");
@@ -146,13 +189,42 @@ int main(int argc, char** argv) {
       }
       //In parent process: update process table
       else if (runningWorker_pid > 0) {
-        sleep(1);
         activatePCB(processTable, runningWorker_pid, psysClock_seconds, psysClock_nanoseconds);
       }
     }
     
-    //In parent: as long as there are active workers, monitor their progress
+  /**********************************************************
+   Sending message to child
+   (send messages to children in order of process table)
+   **********************************************************/
+
+	buf1.mtype = processTable[0].pid;		//set sending message type (type is PID) IF FORGOTTEN -- MSG TYPE BECOMES UNPREDICTABLE
+	buf1.intData = processTable[0].pid;   // (in P3 this is .pid) we will give it the pid we are sending to, so we know it received it
+
+	if (msgsnd(msqid, &buf1/*starting address of buffer*/, sizeof(msgbuffer)-sizeof(long)/*sending size: because it is not SENDING long data*/, 0/*determines whether blocking or non blocking*/) == -1) {
+		perror("msgsnd to child 1 failed\n");
+		exit(1);
+	}
+
+  /**********************************************************
+   Recieve message from child
+   (send messages to children in order of process table)
+   **********************************************************/
+	msgbuffer rcvbuf;
+	// Then let me read a message, but only one meant for me ie: the one the child just is sending back to me
+	if (msgrcv(msqid/*message queue ID*/, &rcvbuf,sizeof(msgbuffer)/*recieving msg is entire size of buffer*/, getpid()/*determine what type of message we want to get*/,0) == -1) {
+		perror("failed to receive message in parent\n");
+		exit(1);
+	}	
+	printf("\n\t******\n\tParent %d received message: my int data was %d\n",getpid(),rcvbuf.intData);    
+    
+    
+  /**********************************************************
+   Watch for terminating children 
+   (do we need "if active"? -- ////TODO//// INVESTIGATE)
+   **********************************************************/
     if (activeWorkers > 0) {
+      //capture pid as workers terminate
       terminatedWorker_pid = waitpid(-1, &wstatus, WNOHANG);
       
       //When parent sees worker has terminated, update the process Table
@@ -167,6 +239,12 @@ int main(int argc, char** argv) {
       }
     }
   } //end while (main loop)
+  
+ 	//clear message queue
+	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
+		perror("msgctl to get rid of queue in parent failed");
+		exit(1);
+	}
 
   //detach from shared memory
   shmdt(psysClock_seconds);
@@ -181,7 +259,7 @@ int main(int argc, char** argv) {
 
 static void help() {
   printf("\n\n\tinfo.\n");
-  printf("\tusage: ./oss [-h help -n proc -s simul  -t timelimit]\n\n");
+  printf("\tusage: ./oss [-h help -n proc -s simul  -t timelimit -f logfile]\n\n");
   exit(0);
 }
 
@@ -220,6 +298,12 @@ void myhandler(int s) {
   errsave = errno;
     
   fprintf(stderr, "\n\n\tCleaning up processes and terminating...\n\n"); 
+  
+  //clear message queue  
+	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
+		perror("msgctl to get rid of queue in parent failed");
+		exit(1);
+	}
  
   //find and kill any running children
   for(int i = 0; i < PROCBUFF; i++) {
@@ -249,7 +333,7 @@ int setupinterrupt(void) { /* set up myhandler for SIGPROF */
 
 int setupitimer(void) { /* set ITIMER_PROF for 60-second intervals */
   struct itimerval value;
-  value.it_interval.tv_sec = 60;
+  value.it_interval.tv_sec = 3;
   value.it_interval.tv_usec = 0;
   value.it_value = value.it_interval;
   return (setitimer(ITIMER_PROF, &value, NULL));

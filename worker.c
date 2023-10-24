@@ -8,12 +8,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
+//#include <string.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
 #include "errorUtils.h"
 #include "macros.h"
+
+//message queue
+#define PERMS 0644
+typedef struct {
+	long mtype;  //used by msg send and recieve (but not SENT)
+	int intData; //int data sent by child
+} msgbuffer;
 
 static void help();
 
 int main(int argc, char** argv) {
+  //message queue variables
+ 	msgbuffer buf;
+	buf.mtype = 1;
+	int msqid = 0;
+	key_t key;
+
   //check for appropriate usage
   if(argc < 3) {
     help();
@@ -57,7 +75,47 @@ int main(int argc, char** argv) {
     term_sec = (curr_sec + sec);
     term_nano = (curr_nano + nano);
   }
+  
+  
+   /**********************************************************
+    Recieving message from parent    
+   **********************************************************/
+   
+  // get a key for our message queue
+	if ((key = ftok("oss", 1)) == -1) {
+		perror("ftok");
+		exit(1);
+	}
 
+	// create our message queue
+	if ((msqid = msgget(key, PERMS)) == -1) {
+		perror("msgget in child");
+		exit(1);
+	}
+
+	printf("\n\t******\n\tChild %d has access to the queue\n",getpid());
+
+	// receive a message, but only one for us
+	if ( msgrcv(msqid, &buf, sizeof(msgbuffer), getpid(), 0) == -1) {
+		perror("failed to receive message from parent\n");
+		exit(1);
+	}
+
+	// output message from parent
+	printf("\n\t******\n\tChild %d received message: my int data was %d\n",getpid(), buf.intData);
+ 
+   /**********************************************************
+    Returning a message to parent    
+   **********************************************************/ 
+	buf.mtype = getppid();  //set msg type to get PARENT PID
+	buf.intData = 1; //in P3 this would be 1 or 0
+
+	if (msgsnd(msqid,&buf,sizeof(msgbuffer)-sizeof(long),0) == -1) {
+		perror("msgsnd to parent failed\n");
+		exit(1);
+	}
+ 
+  printf("\n\t******\n\tChild %d is finishing ... \n",getpid());
   /*********************************************************
    Worker will continuously print status updates until it 
    notices the system clock has reached the calculated 
