@@ -20,11 +20,12 @@
 #define BUFF_SZ sizeof(int)
 
 //toggle output for development: 1 for MORE output
-#define VERBOSE 1
+#define VERBOSE 0
 
 //time constants
 #define ONESECOND_NS 1000000000
 #define HALFSECOND_NS 500000000
 #define TIMEOUT 60
+#define INCREMENTCLK 500000000
 
 #endif
