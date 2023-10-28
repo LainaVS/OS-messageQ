@@ -86,23 +86,22 @@ int main(int argc, char** argv) {
 	}
 
 	/**********************************************************
-	  Setting up message queue
+	  Set up message queue
 	 **********************************************************/
 
-	// get a key for our message queue - use program file to create unique key
+	//get key for message queue
 	if ((key = ftok("oss", 1)) == -1) {
 		perror("ftok");
 		exit(1);
 	}
 
-	// create our message queue
+	//create message queue
 	if ((msqid = msgget(key, PERMS | IPC_CREAT)) == -1) {
 		perror("msgget in parent");
 		exit(1);
 	}
 
-	printf("\n\n\t******\n\tMessage queue set up\n");
-
+	if (VERBOSE == 1 ) { printf("\n\n\t******\n\tMessage queue set up\n"); }
 
 	/********************************************************************
 	  create and intialize system clock to simulate time.
@@ -126,18 +125,18 @@ int main(int argc, char** argv) {
 	//initialize system clock to zero
 	*psysClock_seconds = 0;
 	*psysClock_nanoseconds = 0;
-
 	/**********************end clock initialization*********************/
 
 	//declare and initialize program variables
 	initializeProcTable(processTable);
-	char s_arg[50];            //char arrays to store time arguments for worker process
-	char ns_arg[50];  
-	int terminatedWorker_pid;  //wait pid
-	int wstatus;               //wait status 
-	int activeWorkers = 0;     //counter variables
-	int workersToLaunch = proc;
-
+	char s_arg[50];              //char arrays to store worker arguments
+	char ns_arg[50]; 
+  char * err_msg;
+	int activeWorkers = 0;       //counter variables
+	int workersToLaunch = proc;  //counter variables
+  PCB curr_worker;
+  int wstatus;                  //wait status
+  
 	/********************************************************************
 	  signal handling and timeout 
 	  -- cleans up procs and detaches from mem. Therefore is placed after 
@@ -153,11 +152,11 @@ int main(int argc, char** argv) {
 	}  
 
 	/*******************************************************************
-	  main operation: Loop to fork child processes until all Processes have 
-	  completed. Process launching must obey simultaneous restriction provided
-	  by user. uses a simulated time function to increment shared clock.
+	  main operation: Loop to fork child processes until all processes 
+    have completed. Process launching must obey simultaneous restriction.
+    Increments a shared clock to simulate time.
 	 *******************************************************************/
-
+   
 	while((workersToLaunch > 0 || activeWorkers > 0)) {    
 		incrementClock(psysClock_seconds, psysClock_nanoseconds);
 
@@ -189,61 +188,53 @@ int main(int argc, char** argv) {
 			else if (runningWorker_pid > 0) {
 				activatePCB(processTable, runningWorker_pid, psysClock_seconds, psysClock_nanoseconds);
 			}
-		}
+		} //end if active < simul
 
 
 		/**********************************************************
-		  Sending message to child
-		  (send messages to children in order of process table)
-		 **********************************************************/    
-		if (processTable[0].occupied == OCCUPIED) {
-			buf1.mtype = processTable[0].pid;		//set sending message type
-			buf1.intData = processTable[0].pid; //we give it the pid we are sending to, so we know it received it
-
-			if (msgsnd(msqid, &buf1, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
-				perror("msgsnd to child 1 failed\n");
-				exit(1);
-			}
-			sleep(1); /////////////////////////////////////////////////REMOVE BEFORE SUBMIT
-      
-			/**********************************************************
-			  Recieve message from child
-			  (send messages to children in order of process table)
-			 **********************************************************/
-			msgbuffer rcvbuf;
-			// Then let me read a message, but only one meant for me ie: the one the child just is sending back to me
-			if (msgrcv(msqid, &rcvbuf,sizeof(msgbuffer), getpid(),0) == -1) {
-				perror("failed to receive message in parent\n");
-				exit(1);
-			}	
-			if (VERBOSE ==1 ) { printf("\n\t******\n\tParent %d received message: my int data was %d\n",getpid(),rcvbuf.intData); }
-
-			// check to see if that worker (that sent me a msesage) is terminating?
-      terminatedWorker_pid = waitpid(processTable[0].pid, &wstatus, WNOHANG);
-      if (terminatedWorker_pid == processTable[0].pid) {
-        activeWorkers--;
-        terminatePCB(processTable, processTable[0].pid);
-        if (VERBOSE == 1) { printf("\n\t******\n\tActive workers: %d\n\tClearing out process table...\n\n", activeWorkers); }
-        wait(&wstatus);
-      } else if (terminatedWorker_pid < 0) {
-        perror("msgsnd to child 1 failed\n");
-				exit(1);
-      }
-			//
-			// if so, clear it out of the process table
-			// then, do a wait(0);
-			// the reason is to just clear it out of the system
-			//
-		}
-		//}
-	} //end while (main loop)
+		  Allow each active worker to check clock
+		 **********************************************************/
+    for(int i = 0; i < PROCBUFF; i++) {    
+  		//select next active worker
+      if (processTable[i].occupied == OCCUPIED) {
+        curr_worker = processTable[i];
+        
+  			buf1.mtype = curr_worker.pid;		//set sending message type
+  			buf1.intData = curr_worker.pid; //set target pid
+        
+        //send message to target (curr_worker)
+  			if (msgsnd(msqid, &buf1, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
+  				sprintf(err_msg, "Message to child %d failed", curr_worker.pid); 
+          perror("msgsnd");
+  				fatal(err_msg);
+  			}
+        /***************************WORKER NOW CHECKING CLOCK*************************************/
+        
+  			//recieve message from worker
+  			msgbuffer rcvbuf;
+  			if (msgrcv(msqid, &rcvbuf,sizeof(msgbuffer), getpid(),0) == -1) {
+          perror("msgrcv");
+  				fatal("Failed to recieve message in parent");
+  			}	
+  			if (VERBOSE == 1 ) { printf("\n\t******\n\tParent %d received message: my int data was %d\n",getpid(),rcvbuf.intData); }
+  
+  			// check if curr_worker is terminating
+        if (rcvbuf.intData == TERMINATING) {
+          activeWorkers--;
+          terminatePCB(processTable, curr_worker.pid);
+          if (VERBOSE == 1) { printf("\n\t******\n\tActive workers: %d\n\tClearing out process table...\n\n", activeWorkers); }
+          wait(&wstatus); //allow worker to exit
+  		  }
+  		} //end if OCCUPIED
+    } //end for loop (send msg to each active worker)
+	} //end while(waiting/active workers remain)
  
-  if (VERBOSE ==1 ) { printf("\n\t******\n\tActive Workers: %d Pending Workers: %d\n\tReleasing memory and exiting ...\n\n", activeWorkers, workersToLaunch); }
+  if (VERBOSE == 1 ) { printf("\n\t******\n\tActive Workers: %d Pending Workers: %d\n\tReleasing memory and exiting ...\n\n", activeWorkers, workersToLaunch); }
 
 	//clear message queue
 	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
-		perror("msgctl to get rid of queue in parent failed");
-		exit(1);
+		perror("msgctl");
+		fatal("Removing message queue failed (in parent)");
 	}
 
 	//detach from shared memory
@@ -264,8 +255,8 @@ static void help() {
 }
 
 static void incrementClock(int * sys_sec, int * sys_nano){
-	if (*sys_nano > ONESECOND_NS) {
-		*sys_sec += 1;
+	if (*sys_nano == ONESECOND_NS) {
+		*sys_sec += ONESECOND;
 		*sys_nano = 0;
 	} else {
 		*sys_nano += INCREMENTCLK; 
@@ -277,22 +268,19 @@ static void generateArgs(int limit, char * arg_s, char * arg_ns) {
 	int a_sec = ((rand() % limit) + 1);
 	int a_ns = ((rand() % ONESECOND_NS) + 1);
 
-	//convert int variables to char * for processing 
-	//(source https://www.geeksforgeeks.org/sprintf-in-c/)
+	//convert int variables to char * for processing (source https://www.geeksforgeeks.org/sprintf-in-c/)
 	sprintf(arg_s, "%d", a_sec); 
 	sprintf(arg_ns, "%d", a_ns);
-
-	printf("generated: %ds %dns", a_sec, a_ns);
 }
 
 
-/******************************************************** 
+/**********************************************************
   The following functions were provided by Mark Hauschild 
-Course: 4760 Fall23
-File: periodicasterik.c 
-Kills processes successfully at timeout and ^C 
-All processes cleaned up before exiting program
- ********************************************************/
+  Course: 4760 Fall23     File: periodicasterik.c 
+ **********************************************************
+  Kills processes successfully at timeout and ^C 
+  All processes cleaned up before exiting program
+ **********************************************************/
 void myhandler(int s) {
 	int errsave;
 	errsave = errno;
@@ -319,7 +307,6 @@ void myhandler(int s) {
 	shmctl(pshmid_seconds, IPC_RMID, NULL);
 	shmctl(pshmid_nanoseconds, IPC_RMID, NULL);
 
-
 	errno = errsave;
 	exit(1); 
 }
@@ -333,7 +320,7 @@ int setupinterrupt(void) { /* set up myhandler for SIGPROF */
 
 int setupitimer(void) { /* set ITIMER_PROF for 60-second intervals */
 	struct itimerval value;
-	value.it_interval.tv_sec = 3;
+	value.it_interval.tv_sec = 6;
 	value.it_interval.tv_usec = 0;
 	value.it_value = value.it_interval;
 	return (setitimer(ITIMER_PROF, &value, NULL));

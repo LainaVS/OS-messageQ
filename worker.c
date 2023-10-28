@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
-//#include <string.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
@@ -41,10 +40,10 @@ int main(int argc, char** argv) {
 	int sec = arraytoint(argv[1]);
 	int nano = arraytoint(argv[2]);
 
-	/***************************************************
+	/***********************************************************************
 	  Attaching worker to the system clock for monitoring. 
 	  If any steps fail, print a descriptive error.
-	 ***************************************************/
+	 ***********************************************************************/
 
 	//allocate memory, assign read only permissions
 	int shmid_seconds = shmget(SYSCLK_SKEY, BUFF_SZ, IPC_CREAT | 0444);
@@ -76,9 +75,9 @@ int main(int argc, char** argv) {
 		term_nano = (curr_nano + nano);
 	}
 
-	/**********************************************************
+	/***********************************************************************
 	  Set up message queue
-	 **********************************************************/
+	 ***********************************************************************/
 
 	// get a key for our message queue
 	if ((key = ftok("oss", 1)) == -1) {
@@ -86,7 +85,7 @@ int main(int argc, char** argv) {
 		exit(1);
 	}
 
-	// create our message queue
+	// create message queue
 	if ((msqid = msgget(key, PERMS)) == -1) {
 		perror("msgget in child");
 		exit(1);
@@ -94,11 +93,11 @@ int main(int argc, char** argv) {
 
 	if (VERBOSE == 1) { printf("\n\t******\n\tChild %d has access to the queue\n",getpid()); }
 
-	/*********************************************************
+	/***********************************************************************
 	  Worker will continuously print status updates until it 
 	  notices the system clock has reached the calculated 
 	  termination time. It will print a final update then exit.
-	 *********************************************************/
+	 ***********************************************************************/
 	int secondsPassed; //counter to keep track of worker progress
 
 	//output a status update at start-up
@@ -106,10 +105,7 @@ int main(int argc, char** argv) {
 
 	//loop until system clock exceeds worker's termination time
 	while (*sysClock_seconds <= term_sec) {    
- 
-		/**********************************************************
-		  Recieving message from parent    
-		 **********************************************************/
+   //recieving message from parent    
 		if ( msgrcv(msqid, &buf, sizeof(msgbuffer), getpid(), 0) == -1) {
 			perror("failed to receive message from parent\n");
 			exit(1);
@@ -121,8 +117,6 @@ int main(int argc, char** argv) {
 		if (*sysClock_seconds == term_sec && *sysClock_nanoseconds >= term_nano)    
     	break;
 
-		/**********************might replace with check for last second***********************************/
-
 		//look at system clock and print status update
 		if (curr_sec < *sysClock_seconds) {
 
@@ -133,12 +127,10 @@ int main(int argc, char** argv) {
 			printf("\n\tWORKER PID:%d  PPID:%d  SysClockS:%d  SysClockNano:%d  TermTimeS:%d  TermTimeNano:%d\n\t--%d seconds have passed since starting\n", getpid(), getppid(), curr_sec, curr_nano, term_sec, term_nano, secondsPassed);
 		}
 
-		/**********************************************************
-		  Worker operations completed: return a message to parent    
-		 **********************************************************/ 
 		buf.mtype = getppid();  //set msg type to get PARENT PID
-    buf.intData = 0; //continue
-
+    buf.intData = CONTINUING;       //continue
+    
+    //Worker operations completed: send message indicating continue
 		if (msgsnd(msqid,&buf,sizeof(msgbuffer)-sizeof(long),0) == -1) {
 			perror("msgsnd to parent failed\n");
 			exit(1);
@@ -149,8 +141,8 @@ int main(int argc, char** argv) {
 
   //notify parent of termination
   buf.mtype = getppid();  //set msg type to get PARENT PID
-  buf.intData = 1;        //about to terminate	
-  if (VERBOSE ==1 ) { printf("\n\t******\n\tSending termination message to parent ...\n"); }
+  buf.intData = TERMINATING;        //about to terminate	
+  if (VERBOSE == 1 ) { printf("\n\t******\n\tSending termination message to parent ...\n"); }
   
   if (msgsnd(msqid,&buf,sizeof(msgbuffer)-sizeof(long),0) == -1) {
     perror("msgsnd to parent failed\n");

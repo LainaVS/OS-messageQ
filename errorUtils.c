@@ -26,8 +26,7 @@ int arraytoint(char *val) {
 
 /******************************************************** 
  The following functions were provided by Mark Hauschild 
- Course: 4760 Fall23
- File: periodicasterik.c 
+ Course: 4760 Fall23    File: periodicasterik.c 
  ********************************************************
 void myhandler(int s) {
 	int errsave;
