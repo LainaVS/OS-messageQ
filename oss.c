@@ -52,10 +52,6 @@ int main(int argc, char** argv) {
 	int timelim = 3;
 	char * logfile = "log.txt";
 
-	//message queue variables
-	msgbuffer buf;
-	key_t key;
-
 	//parse options
 	int option;
 	while ((option = getopt(argc, argv, "hn:s:t:f: ")) != -1) {
@@ -86,16 +82,18 @@ int main(int argc, char** argv) {
 	}
  
 	//declare and initialize program variables
-	initializeProcTable(processTable);
+	msgbuffer buf;               //message queue variables
+	key_t key;
 	char s_arg[50];              //char arrays to store worker arguments
 	char ns_arg[50]; 
   char msg[200];               //char array to store OSS messages
 	int activeWorkers = 0;       //counter variables
 	int workersToLaunch = proc;  //counter variables
   PCB curr_worker;
-  int wstatus;                  //wait status
+  int wstatus;                 //wait status
+  initializeProcTable(processTable);
   
-  //open logfile for write ////////////////////////////MAY RELOCATE
+  //open logfile for write
   FILE* logfilePtr;
   logfilePtr = fopen(logfile, "w");
   
@@ -173,14 +171,12 @@ int main(int argc, char** argv) {
 		//Print process table every half second
 		if (*psysClock_nanoseconds % HALFSECOND_NS == 0)
 			printProcTable(processTable, getpid(), psysClock_seconds, psysClock_nanoseconds);
+      
 		//Whenever possible, launch a new process
 		if (activeWorkers < simul && workersToLaunch > 0) {
-
-			//Keep track of active and waiting worker processes
 			activeWorkers++;    
 			workersToLaunch--;
 
-			//Fork new process
 			pid_t runningWorker_pid = fork();
 
 			//In child process: exec to worker
@@ -202,15 +198,15 @@ int main(int argc, char** argv) {
 		/**********************************************************
 		  Allow each active worker to check clock
 		 **********************************************************/
-    for(int i = 0; i < PROCBUFF; i++) {    
-  		//select next active worker
+      
+    for(int i = 0; i < PROCBUFF; i++) {
       if (processTable[i].occupied == OCCUPIED) {
         curr_worker = processTable[i];
         
   			buf.mtype = curr_worker.pid;		//set sending message type
   			buf.intData = curr_worker.pid; //set target pid
         
-        //output message data for stdout and logfile
+        //message data for stdout and logfile
         sprintf(msg, "OSS: Sending message to worker %d PID %d at time %d:%d", i, curr_worker.pid, *psysClock_seconds, *psysClock_nanoseconds);
         printf("\n\t%s\n", msg);
         fprintf(logfilePtr, "%s\n", msg);
@@ -231,33 +227,29 @@ int main(int argc, char** argv) {
   				fatal("Failed to recieve message in parent");
   			}	
         
-        //output message data for stdout and log
+        //message data for stdout and log
         sprintf(msg, "OSS: Recieving message from worker %d PID %d at time %d:%d", i, curr_worker.pid, *psysClock_seconds, *psysClock_nanoseconds);
         printf("\n\t%s\n", msg);
         fprintf(logfilePtr, "%s\n", msg);
           
-  			// check if curr_worker is terminating
+  			//check if curr_worker is terminating
         if (rcvbuf.intData == TERMINATING) {
           activeWorkers--;
           terminatePCB(processTable, curr_worker.pid);
           
-          //output message data for log
+          //message data for stdout and log
           sprintf(msg, "OSS: Worker %d PID %d is planning to terminate", i, curr_worker.pid);
           printf("\n\t%s\n", msg);
           fprintf(logfilePtr, "%s\n", msg);
           
-          if (VERBOSE == 1) { printf("\n\t******\n\tActive workers: %d\n\tClearing out process table...\n\n", activeWorkers); }
           wait(&wstatus); //allow worker to exit
   		  }
   		} //end if OCCUPIED
     } //end for loop (send msg to each active worker)
 	} //end while(waiting/active workers remain)
 
-  //close logfile //////////////////////////////////////////MAY RELOCATE
+  //close logfile
   fclose(logfilePtr);
-  if (VERBOSE == 1) { printf("log file %s now closed", logfile); }
-  
-  if (VERBOSE == 1 ) { printf("\n\t******\n\tActive Workers: %d Pending Workers: %d\n\tReleasing memory and exiting ...\n\n", activeWorkers, workersToLaunch); }
 
 	//clear message queue
 	if (msgctl(msqid, IPC_RMID, NULL) == -1) {
@@ -348,7 +340,7 @@ int setupinterrupt(void) { /* set up myhandler for SIGPROF */
 
 int setupitimer(void) { /* set ITIMER_PROF for 60-second intervals */
 	struct itimerval value;
-	value.it_interval.tv_sec = 6;
+	value.it_interval.tv_sec = 60;
 	value.it_interval.tv_usec = 0;
 	value.it_value = value.it_interval;
 	return (setitimer(ITIMER_PROF, &value, NULL));

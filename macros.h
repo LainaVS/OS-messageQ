@@ -30,7 +30,7 @@
 #define INCREMENTCLK 100000000
 
 //shared message constants
-#define TERMINATING 1
-#define CONTINUING 0
+#define TERMINATING 0
+#define CONTINUING 1
 
 #endif

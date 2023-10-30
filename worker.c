@@ -91,8 +91,6 @@ int main(int argc, char** argv) {
 		exit(1);
 	}
 
-	if (VERBOSE == 1) { printf("\n\t******\n\tChild %d has access to the queue\n",getpid()); }
-
 	/***********************************************************************
 	  Worker will continuously print status updates until it 
 	  notices the system clock has reached the calculated 
@@ -140,8 +138,7 @@ int main(int argc, char** argv) {
 
   //notify parent of termination
   buf.mtype = getppid();          //set msg type to get PARENT PID
-  buf.intData = TERMINATING;      //about to terminate	
-  if (VERBOSE == 1 ) { printf("\n\t******\n\tSending termination message to parent ...\n"); }
+  buf.intData = TERMINATING;      //about to terminate
   
   if (msgsnd(msqid,&buf,sizeof(msgbuffer)-sizeof(long),0) == -1) {
     perror("msgsnd to parent failed\n");

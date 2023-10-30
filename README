@@ -14,18 +14,18 @@ With defaults:
 > ./oss
 
 With args:
-> ./oss ...
+> ./oss -n 3 -s 3 -t 4 -f logaroonie.txt
 
 
 Notes:
-No options are required. Default argument for options is #############. 
-Default for log file is #########.
+Program may be called with all options, some options, or no options.
+Default argument are as follows:
+-n and -s are both 1, -t is 3, and -f is log.txt.
 
-#?#Program runs as expected and user is limited to argument values not greater than 10.
-
+Program runs as expected and user arguments are not limited.
 
 Problems encountered during development:
-#?#
+Determining how to capture termination signal from worker. Wait call needed to be relocated.
 
 git:
-##CHANGE##https://comp.umsl.edu/gitlab/emrwc6/4760-oss-p2##CHANGE##
+https://github.com/LainaVS/OS-messageQ
