@@ -111,8 +111,6 @@ int main(int argc, char** argv) {
 			exit(1);
 		}
 
-		if (VERBOSE ==1 ) { printf("\n\t******\n\tChild %d received message: my int data was %d\n",getpid(), buf.intData); }
-
 		//special case: if termination second is reached, check whether termination nano has been exceeded
 		if (*sysClock_seconds == term_sec && *sysClock_nanoseconds >= term_nano)    
     	break;

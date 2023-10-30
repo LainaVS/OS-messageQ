@@ -89,12 +89,22 @@ int main(int argc, char** argv) {
 	initializeProcTable(processTable);
 	char s_arg[50];              //char arrays to store worker arguments
 	char ns_arg[50]; 
-  char * err_msg = "";
+  char msg[200];               //char array to store OSS messages
 	int activeWorkers = 0;       //counter variables
 	int workersToLaunch = proc;  //counter variables
   PCB curr_worker;
   int wstatus;                  //wait status
-
+  
+  //open logfile for write ////////////////////////////MAY RELOCATE
+  FILE* logfilePtr;
+  logfilePtr = fopen(logfile, "w");
+  
+  if (logfilePtr == NULL) {
+    fatal("logfile could not be opened for writing");
+  } else {
+    if (VERBOSE == 1) { printf("%s file now opened for logging OSS output.", logfile); }
+  }
+   
 	/********************************************************************
 	  Set up message queue
 	 ********************************************************************/
@@ -200,14 +210,16 @@ int main(int argc, char** argv) {
   			buf.mtype = curr_worker.pid;		//set sending message type
   			buf.intData = curr_worker.pid; //set target pid
         
-        //output message data for log
-        printf("\n\n\tOSS: Sending message to worker %d PID %d at time %d:%d\n", i, curr_worker.pid, *psysClock_seconds, *psysClock_nanoseconds);
+        //output message data for stdout and logfile
+        sprintf(msg, "OSS: Sending message to worker %d PID %d at time %d:%d", i, curr_worker.pid, *psysClock_seconds, *psysClock_nanoseconds);
+        printf("\n\t%s\n", msg);
+        fprintf(logfilePtr, "%s\n", msg);
         
         //send message to target (curr_worker)
   			if (msgsnd(msqid, &buf, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
-  				sprintf(err_msg, "Message to child %d failed", curr_worker.pid); 
+  				sprintf(msg, "Message to child %d failed", curr_worker.pid); 
           perror("msgsnd");
-  				fatal(err_msg);
+  				fatal(msg);
   			}
         
         /**************WORKER NOW CHECKING CLOCK***************/
@@ -219,8 +231,10 @@ int main(int argc, char** argv) {
   				fatal("Failed to recieve message in parent");
   			}	
         
-        //output message data for log
-        printf("\n\n\tOSS: Recieving message from worker %d PID %d at time %d:%d\n", i, curr_worker.pid, *psysClock_seconds, *psysClock_nanoseconds);
+        //output message data for stdout and log
+        sprintf(msg, "OSS: Recieving message from worker %d PID %d at time %d:%d", i, curr_worker.pid, *psysClock_seconds, *psysClock_nanoseconds);
+        printf("\n\t%s\n", msg);
+        fprintf(logfilePtr, "%s\n", msg);
           
   			// check if curr_worker is terminating
         if (rcvbuf.intData == TERMINATING) {
@@ -228,7 +242,9 @@ int main(int argc, char** argv) {
           terminatePCB(processTable, curr_worker.pid);
           
           //output message data for log
-          printf("\n\n\tOSS: Worker %d PID %d is planning to terminate.\n", i, curr_worker.pid);
+          sprintf(msg, "OSS: Worker %d PID %d is planning to terminate", i, curr_worker.pid);
+          printf("\n\t%s\n", msg);
+          fprintf(logfilePtr, "%s\n", msg);
           
           if (VERBOSE == 1) { printf("\n\t******\n\tActive workers: %d\n\tClearing out process table...\n\n", activeWorkers); }
           wait(&wstatus); //allow worker to exit
@@ -236,7 +252,11 @@ int main(int argc, char** argv) {
   		} //end if OCCUPIED
     } //end for loop (send msg to each active worker)
 	} //end while(waiting/active workers remain)
- 
+
+  //close logfile //////////////////////////////////////////MAY RELOCATE
+  fclose(logfilePtr);
+  if (VERBOSE == 1) { printf("log file %s now closed", logfile); }
+  
   if (VERBOSE == 1 ) { printf("\n\t******\n\tActive Workers: %d Pending Workers: %d\n\tReleasing memory and exiting ...\n\n", activeWorkers, workersToLaunch); }
 
 	//clear message queue
