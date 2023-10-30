@@ -27,7 +27,7 @@
 #define HALFSECOND_NS 500000000
 #define ONESECOND 1
 #define TIMEOUT 60
-#define INCREMENTCLK 50000
+#define INCREMENTCLK 100000000
 
 //shared message constants
 #define TERMINATING 1

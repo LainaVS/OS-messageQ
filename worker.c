@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
 	int secondsPassed; //counter to keep track of worker progress
 
 	//output a status update at start-up
-	printf("\n\tWORKER PID:%d  PPID:%d  SysClockS:%d  SysClockNano:%d  TermTimeS:%d  TermTimeNano:%d \n\t--Just Starting\n\n", getpid(), getppid(), *sysClock_seconds, *sysClock_nanoseconds, term_sec, term_nano);
+	printf("\n\tWORKER PID:%d  PPID:%d  Called with oss: TermTimeS:%d  TermTimeNano:%d \n\t--Received message\n\n", getpid(), getppid(), term_sec, term_nano);
 
 	//loop until system clock exceeds worker's termination time
 	while (*sysClock_seconds <= term_sec) {    
@@ -124,13 +124,14 @@ int main(int argc, char** argv) {
 			curr_nano = *sysClock_nanoseconds;
 			secondsPassed = curr_sec - start_sec;
 
+      //periodic output
 			printf("\n\tWORKER PID:%d  PPID:%d  SysClockS:%d  SysClockNano:%d  TermTimeS:%d  TermTimeNano:%d\n\t--%d seconds have passed since starting\n", getpid(), getppid(), curr_sec, curr_nano, term_sec, term_nano, secondsPassed);
 		}
 
 		buf.mtype = getppid();  //set msg type to get PARENT PID
     buf.intData = CONTINUING;       //continue
     
-    //Worker operations completed: send message indicating continue
+    //Worker operations completed: send message indicating the worker will continue
 		if (msgsnd(msqid,&buf,sizeof(msgbuffer)-sizeof(long),0) == -1) {
 			perror("msgsnd to parent failed\n");
 			exit(1);
@@ -140,8 +141,8 @@ int main(int argc, char** argv) {
 	}
 
   //notify parent of termination
-  buf.mtype = getppid();  //set msg type to get PARENT PID
-  buf.intData = TERMINATING;        //about to terminate	
+  buf.mtype = getppid();          //set msg type to get PARENT PID
+  buf.intData = TERMINATING;      //about to terminate	
   if (VERBOSE == 1 ) { printf("\n\t******\n\tSending termination message to parent ...\n"); }
   
   if (msgsnd(msqid,&buf,sizeof(msgbuffer)-sizeof(long),0) == -1) {

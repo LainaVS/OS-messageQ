@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
 	char * logfile = "log.txt";
 
 	//message queue variables
-	msgbuffer buf0, buf1;
+	msgbuffer buf;
 	key_t key;
 
 	//parse options
@@ -84,10 +84,20 @@ int main(int argc, char** argv) {
 	if (VERBOSE == 1) { 
 		printf("\n\n\tOSS will run %d workers. Workers will run up to %d seconds.\n\tMaximum of %d simultaneous workers allowed in system.\n\tOSS output will be recorded in %s file.\n\n", proc, timelim, simul, logfile); 
 	}
+ 
+	//declare and initialize program variables
+	initializeProcTable(processTable);
+	char s_arg[50];              //char arrays to store worker arguments
+	char ns_arg[50]; 
+  char * err_msg = "";
+	int activeWorkers = 0;       //counter variables
+	int workersToLaunch = proc;  //counter variables
+  PCB curr_worker;
+  int wstatus;                  //wait status
 
-	/**********************************************************
+	/********************************************************************
 	  Set up message queue
-	 **********************************************************/
+	 ********************************************************************/
 
 	//get key for message queue
 	if ((key = ftok("oss", 1)) == -1) {
@@ -125,23 +135,13 @@ int main(int argc, char** argv) {
 	//initialize system clock to zero
 	*psysClock_seconds = 0;
 	*psysClock_nanoseconds = 0;
-	/**********************end clock initialization*********************/
-
-	//declare and initialize program variables
-	initializeProcTable(processTable);
-	char s_arg[50];              //char arrays to store worker arguments
-	char ns_arg[50]; 
-  char * err_msg;
-	int activeWorkers = 0;       //counter variables
-	int workersToLaunch = proc;  //counter variables
-  PCB curr_worker;
-  int wstatus;                  //wait status
   
 	/********************************************************************
 	  signal handling and timeout 
 	  -- cleans up procs and detaches from mem. Therefore is placed after 
 	  process table initialization and attaching to shared memory.
 	 ********************************************************************/
+
 	if (setupinterrupt() == -1) {
 		perror("Failed to set up handler for SIGPROF");
 		return 1;
@@ -151,11 +151,11 @@ int main(int argc, char** argv) {
 		return 1;
 	}  
 
-	/*******************************************************************
+	/********************************************************************
 	  main operation: Loop to fork child processes until all processes 
     have completed. Process launching must obey simultaneous restriction.
     Increments a shared clock to simulate time.
-	 *******************************************************************/
+	 ********************************************************************/
    
 	while((workersToLaunch > 0 || activeWorkers > 0)) {    
 		incrementClock(psysClock_seconds, psysClock_nanoseconds);
@@ -163,7 +163,6 @@ int main(int argc, char** argv) {
 		//Print process table every half second
 		if (*psysClock_nanoseconds % HALFSECOND_NS == 0)
 			printProcTable(processTable, getpid(), psysClock_seconds, psysClock_nanoseconds);
-
 		//Whenever possible, launch a new process
 		if (activeWorkers < simul && workersToLaunch > 0) {
 
@@ -190,7 +189,6 @@ int main(int argc, char** argv) {
 			}
 		} //end if active < simul
 
-
 		/**********************************************************
 		  Allow each active worker to check clock
 		 **********************************************************/
@@ -199,29 +197,39 @@ int main(int argc, char** argv) {
       if (processTable[i].occupied == OCCUPIED) {
         curr_worker = processTable[i];
         
-  			buf1.mtype = curr_worker.pid;		//set sending message type
-  			buf1.intData = curr_worker.pid; //set target pid
+  			buf.mtype = curr_worker.pid;		//set sending message type
+  			buf.intData = curr_worker.pid; //set target pid
+        
+        //output message data for log
+        printf("\n\n\tOSS: Sending message to worker %d PID %d at time %d:%d\n", i, curr_worker.pid, *psysClock_seconds, *psysClock_nanoseconds);
         
         //send message to target (curr_worker)
-  			if (msgsnd(msqid, &buf1, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
+  			if (msgsnd(msqid, &buf, sizeof(msgbuffer)-sizeof(long), 0) == -1) {
   				sprintf(err_msg, "Message to child %d failed", curr_worker.pid); 
           perror("msgsnd");
   				fatal(err_msg);
   			}
-        /***************************WORKER NOW CHECKING CLOCK*************************************/
         
+        /**************WORKER NOW CHECKING CLOCK***************/
+
   			//recieve message from worker
   			msgbuffer rcvbuf;
   			if (msgrcv(msqid, &rcvbuf,sizeof(msgbuffer), getpid(),0) == -1) {
           perror("msgrcv");
   				fatal("Failed to recieve message in parent");
   			}	
-  			if (VERBOSE == 1 ) { printf("\n\t******\n\tParent %d received message: my int data was %d\n",getpid(),rcvbuf.intData); }
-  
+        
+        //output message data for log
+        printf("\n\n\tOSS: Recieving message from worker %d PID %d at time %d:%d\n", i, curr_worker.pid, *psysClock_seconds, *psysClock_nanoseconds);
+          
   			// check if curr_worker is terminating
         if (rcvbuf.intData == TERMINATING) {
           activeWorkers--;
           terminatePCB(processTable, curr_worker.pid);
+          
+          //output message data for log
+          printf("\n\n\tOSS: Worker %d PID %d is planning to terminate.\n", i, curr_worker.pid);
+          
           if (VERBOSE == 1) { printf("\n\t******\n\tActive workers: %d\n\tClearing out process table...\n\n", activeWorkers); }
           wait(&wstatus); //allow worker to exit
   		  }
@@ -278,7 +286,7 @@ static void generateArgs(int limit, char * arg_s, char * arg_ns) {
   The following functions were provided by Mark Hauschild 
   Course: 4760 Fall23     File: periodicasterik.c 
  **********************************************************
-  Kills processes successfully at timeout and ^C 
+  Kills processes at timeout and ^C 
   All processes cleaned up before exiting program
  **********************************************************/
 void myhandler(int s) {

@@ -41,13 +41,13 @@ void myhandler(int s) {
   shmctl(pshmid_nanoseconds, IPC_RMID, NULL);
   errno = errsave;
 }
-int setupinterrupt(void) { /* set up myhandler for SIGPROF *
+int setupinterrupt(void) { // set up myhandler for SIGPROF
   struct sigaction act;
   act.sa_handler = myhandler;
   act.sa_flags = 0;
   return (sigemptyset(&act.sa_mask) || sigaction(SIGPROF, &act, NULL) || sigaction(SIGINT, &act, NULL) || sigaction(SIGTERM, &act, NULL));
 }
-int setupitimer(void) { /* set ITIMER_PROF for 60-second intervals *
+int setupitimer(void) { // set ITIMER_PROF for 60-second intervals
   struct itimerval value;
   value.it_interval.tv_sec = 1;
   value.it_interval.tv_usec = 0;
